@@ -18,6 +18,8 @@ find_package(catkin REQUIRED COMPONENTS
   image_transport
   message_generation
   yolo2
+  message_filters
+  pcl_ros
 )
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)

@@ -1,0 +1,5 @@
+<launch>
+	<include file="$(find video_stream_opencv)/launch/camera.launch" />
+	<include file="$(find yolo2)/launch/yolo.launch" />
+	<node pkg="rostopic" type="rostopic" name="rostopic" args='pub -l /vision/yolo2/enable std_msgs/Bool "data: true"'/>
+</launch>

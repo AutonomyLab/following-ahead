@@ -1,0 +1,12 @@
+<launch>
+
+ <!-- Include official launch file and specify camera_info urls -->
+ <include file="$(find openni_launch)/launch/openni.launch">
+   <!-- provide arguments to that launch file -->
+   <arg name="rgb_camera_info_url"
+        value="file://$(find person_follower)/config/rgb_A00365802930050A.yaml" />
+   <arg name="depth_camera_info_url"
+        value="file://$(find person_follower)/config/depth_A00365802930050A.yaml" />
+ </include>
+
+</launch>

@@ -1,5 +1,18 @@
 #include "ros/ros.h"
 #include "yolo2/ImageDetections.h"
+#include <std_msgs/Bool.h>
+#include <std_msgs/String.h>
+#include <sensor_msgs/Image.h>
+#include <message_filters/subscriber.h>
+#include <message_filters/time_synchronizer.h>
+#include <message_filters/synchronizer.h>
+#include <message_filters/sync_policies/approximate_time.h>
+#include "image_transport/image_transport.h"
+#include <cv_bridge/cv_bridge.h>
+#include <pcl_ros/point_cloud.h>
+#include <pcl/point_types.h>
+#include <sensor_msgs/PointCloud.h>
+#include <geometry_msgs/Point32.h>
 
 #include <sstream>
 
@@ -8,6 +21,7 @@
 #include <cmath>
 #include <opencv2/core.hpp>
 #include <opencv2/opencv.hpp>
+
 #include "pid.h"
 #include "stage.hh"
 
@@ -28,10 +42,10 @@ static const int numUpdateReferenceFrame = 30;
 static const int imageWidth = 640;
 static const int imageHeight = 480;
 static const float fov = 60.0*M_PI/180.0;
-static const float focalLenghtX = 555.677770;
-static const float focalLenghtY = 517.585903;
-static const float cameraPrincipleX = 301.832758;
-static const float cameraPrincipleY = 225.408050;
+static const float focalLengthX = 538.914261;
+static const float focalLengthY = 504.416883;
+static const float cameraPrincipalX = 311.027555;
+static const float cameraPrincipalY = 260.575111;
 
 
 int maxblobx = 80;
@@ -77,6 +91,8 @@ int getOtherRobotPoseLaser(const Stg::ModelRanger::Sensor& sensor,  robot_t *rob
 int getDestinationBasedOnOtherObjectPoses(robot_t *robot, Stg::Pose otherRobot, Stg::Pose& avgDestinations);
 int createWaypoint(robot_t *robot, Stg::Pose, char* color);
 
+ros::Publisher pubPointCloud;
+sensor_msgs::PointCloud::Ptr pointCloudMsg (new sensor_msgs::PointCloud);
 
 double getBlobBearing( double blobCoord)
 {
@@ -85,28 +101,90 @@ double getBlobBearing( double blobCoord)
 
 }
 
-void detectionCallback(const yolo2::ImageDetections::ConstPtr &msg)
+float median(std::vector<float> &v)
+{
+    size_t n = v.size() / 2;
+    nth_element(v.begin(), v.begin()+n, v.end());
+    return v[n];
+}
+
+void detectionCallback(const yolo2::ImageDetections::ConstPtr &detectionMsg, const sensor_msgs::Image::ConstPtr &depthMsg)
 {
   std::vector<cv::Point2f> distortedPoints;
   std::vector<cv::Point2f> undistortedPoints;
 
-  for (int i=0; i<msg->detections.size(); i++)
+  cv_bridge::CvImageConstPtr cv_ptr;
+  cv_ptr = cv_bridge::toCvShare(depthMsg);
+  
+  std::vector<cv::Point2f> vectPersonPoints;
+
+  cv::Mat matPersonSegmented = cv::Mat::zeros(depthMsg->height, depthMsg->width, CV_8UC1);
+  for (int i=0; i<detectionMsg->detections.size(); i++)
   {
-    if (msg->detections[i].class_id != 0)
+    if (detectionMsg->detections[i].class_id != 0)
       continue;
     // Stg::ModelBlobfinder  myFinder;
-    // std::cout << msg->detections[i].class_id << std::endl;
-    // std::cout << msg->detections[i].x << ", " << msg->detections[i].y << std::endl;
-    // std::cout << msg->detections[i].width << ", " << msg->detections[i].height << std::endl << std::endl  ;
+    // std::cout << detectionMsg->detections[i].class_id << std::endl;
+    // std::cout << detectionMsg->detections[i].x << ", " << detectionMsg->detections[i].y << std::endl;
+    // std::cout << detectionMsg->detections[i].width << ", " << detectionMsg->detections[i].height << std::endl << std::endl  ;
     // // myFinder.fov = 70.0*M_PI/180.0;
     // myFinder.
     distortedPoints.push_back(cv::Point2f(
-      msg->detections[i].roi.x_offset + msg->detections[i].roi.width/2.0 ,
-      msg->detections[i].roi.y_offset + msg->detections[i].roi.height/2.0
+      detectionMsg->detections[i].roi.x_offset + detectionMsg->detections[i].roi.width/2.0 ,
+      detectionMsg->detections[i].roi.y_offset + detectionMsg->detections[i].roi.height/2.0
 
     ));
-    
+
+    std::vector<float> depthValues;
+
+    for (
+          int row=detectionMsg->detections[i].roi.y_offset; 
+          row<detectionMsg->detections[i].roi.y_offset+detectionMsg->detections[i].roi.height;
+          row++
+        )
+    {
+      for (
+            int col=detectionMsg->detections[i].roi.x_offset; 
+            col<detectionMsg->detections[i].roi.x_offset+detectionMsg->detections[i].roi.width;
+            col++
+          )
+      {
+        vectPersonPoints.push_back(cv::Point2f(col, row));
+        depthValues.push_back(cv_ptr->image.at<float>(row, col));
+      }
+    }
+
+    // float medianDepth = median(depthValues);
+
+    // for (
+    //       int row=detectionMsg->detections[i].roi.y_offset; 
+    //       row<detectionMsg->detections[i].roi.y_offset+detectionMsg->detections[i].roi.height;
+    //       row++
+    //     )
+    // {
+    //   for (
+    //         int col=detectionMsg->detections[i].roi.x_offset; 
+    //         col<detectionMsg->detections[i].roi.x_offset+detectionMsg->detections[i].roi.width;
+    //         col++
+    //       )
+    //   {
+    //     if (
+    //           cv_ptr->image.at<float>(row, col) >= medianDepth-0.12 &&
+    //           cv_ptr->image.at<float>(row, col) <= medianDepth+0.12
+    //       )   
+    //     {
+    //       matPersonSegmented.at<uint8_t>(row, col) = 255;
+    //     }
+        
+    //   }
+    // }
+
+
+
   }
+
+  // cv::imshow("window", matPersonSegmented);
+  // cv::waitKey(5);
 
   if (distortedPoints.size()==0)
   {
@@ -114,30 +192,71 @@ void detectionCallback(const yolo2::ImageDetections::ConstPtr &msg)
   }
 
   cv::Mat cameraMatrix = cv::Mat::eye(3, 3, CV_32F);
-  cameraMatrix.at<float>(0, 0) = focalLenghtX;
-  cameraMatrix.at<float>(1, 1) = focalLenghtY;
-  cameraMatrix.at<float>(0, 2) = cameraPrincipleX;
-  cameraMatrix.at<float>(1, 2) = cameraPrincipleY;
+  cameraMatrix.at<float>(0, 0) = focalLengthX;
+  cameraMatrix.at<float>(1, 1) = focalLengthY;
+  cameraMatrix.at<float>(0, 2) = cameraPrincipalX;
+  cameraMatrix.at<float>(1, 2) = cameraPrincipalY;
 
   cv::Mat newCameraMatrix(3, 3, CV_32F);
   
   cv::Vec<float, 5> distortionCoeffs;
-  distortionCoeffs[0] = 0.056315;
-  distortionCoeffs[1] = -0.122628;
-  distortionCoeffs[2] = 0.002031;
-  distortionCoeffs[3] = -0.007637;
+  distortionCoeffs[0] = 0.176206;
+  distortionCoeffs[1] = -0.363409;
+  distortionCoeffs[2] = 0.001018;
+  distortionCoeffs[3] =  -0.003290;
   distortionCoeffs[4] = 0.000000;
 
   cv::undistortPoints(distortedPoints, undistortedPoints, cameraMatrix, distortionCoeffs);
 
+  std::cout << "Depth image size: " <<  cv_ptr->image.size() << std::endl;
   for (size_t i = 0; i < undistortedPoints.size(); i++)
   {
     cv::Point2f pt = undistortedPoints[i];
+    float depth = cv_ptr->image.at<float>( (size_t)distortedPoints[i].y, (size_t)distortedPoints[i].x );
 
-    std::cout << pt << std::endl;
-    std::cout << newCameraMatrix << std::endl;
-    std::cout << getBlobBearing(pt.x * cameraMatrix.at<float>(0, 0)) * 180.0 / M_PI << std::endl;
+    float x = (distortedPoints[i].x - cameraPrincipalX)/focalLengthX*depth;
+    float y = (distortedPoints[i].y - cameraPrincipalY)/focalLengthY*depth;
+    float z = depth;
+
+    std::cout << distortedPoints[i] << std::endl;
+    std::cout << "(" 
+              << x << ", "
+              << y << ", "
+              << z << ") "
+              << std::endl
+              << std::endl;
+
+    // std::cout << getBlobBearing(pt.x * cameraMatrix.at<float>(0, 0)) * 180.0 / M_PI << std::endl;
   }
+
+  undistortedPoints.clear();
+  cv::undistortPoints(vectPersonPoints, undistortedPoints, cameraMatrix, distortionCoeffs);
+  pointCloudMsg->header.frame_id = "world";
+  // pointCloudMsg->height = pointCloudMsg->width = 1;
+  pointCloudMsg->header.stamp = ros::Time::now();
+  pointCloudMsg->points.clear();
+
+  for (size_t i = 0; i < undistortedPoints.size(); i++)
+  {
+    cv::Point2f pt = undistortedPoints[i];
+    float depth = cv_ptr->image.at<float>( (size_t)vectPersonPoints[i].y, (size_t)vectPersonPoints[i].x );
+
+    float x = (vectPersonPoints[i].x - cameraPrincipalX)/focalLengthX*depth;
+    float y = (vectPersonPoints[i].y - cameraPrincipalY)/focalLengthY*depth;
+    float z = depth;
+
+    geometry_msgs::Point32 point;
+    point.x = -x;
+    point.y = -z;
+    point.z = -y;
+
+    pointCloudMsg->points.push_back(point);
+  }
+
+
+  pubPointCloud.publish(pointCloudMsg);
+  
+  
   std::cout << std::endl;
 }
 
@@ -148,10 +267,20 @@ int main(int argc, char** argv )
 
   ros::init(argc, argv, "person_follower_node");
   ros::NodeHandle n;
-  ros::Subscriber detection_sub = n.subscribe("/vision/yolo2/detections", 10, detectionCallback);
+  
+  // ros::Publisher yoloEnablePub = n.advertise("vision/yolo2/enable", 1000);
+  // yoloEnablePub.publish(std_msgs::Bool(true));
+
+  message_filters::Subscriber<yolo2::ImageDetections> detectionSub(n, "vision/yolo2/detections", 1);
+  message_filters::Subscriber<sensor_msgs::Image> depthSub(n, "camera/depth_registered/sw_registered/image_rect", 1);
+  typedef message_filters::sync_policies::ApproximateTime<yolo2::ImageDetections, sensor_msgs::Image> SyncPolicy;
+  message_filters::Synchronizer<SyncPolicy> sync(SyncPolicy(10), detectionSub, depthSub);
+  sync.registerCallback(boost::bind(&detectionCallback, _1, _2));
+  // ros::Subscriber detection_sub = n.subscribe("/vision/yolo2/detections", 10, detectionCallback);
+
+  pubPointCloud =  n.advertise<sensor_msgs::PointCloud>("person_cloud", 1);
+  
   ros::spin();
-
-
 
 
   robot_t *robot = new robot_t();
