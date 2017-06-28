@@ -13,6 +13,7 @@
 #include <pcl/point_types.h>
 #include <sensor_msgs/PointCloud.h>
 #include <geometry_msgs/Point32.h>
+#include "robot.hpp"
 
 #include <sstream>
 
@@ -264,6 +265,9 @@ void detectionCallback(const yolo2::ImageDetections::ConstPtr &detectionMsg, con
 // Stage calls robotthis when the model starts up
 int main(int argc, char** argv )
 {
+  Robot myRobot;
+
+
 
   ros::init(argc, argv, "person_follower_node");
   ros::NodeHandle n;
@@ -308,11 +312,6 @@ int main(int argc, char** argv )
   return 0; // ok
 }
 
-int calPosBasedSpeed(Stg::Pose speed, Stg::Pose &robot_pose)
-{   
-  robot_pose = Stg::Pose(robot_pose.x+speed.x, robot_pose.y+speed.y, 0, 0);
-  return 0;
-}
 
 int myBlobUpdate ( robot_t *robot, bool isFront)
 {
@@ -377,56 +376,13 @@ int myBlobUpdate ( robot_t *robot, bool isFront)
     {
       return 0;
     }
-    // double x = otherRobot.x;
-    // double y = otherRobot.y;
-    // double x =  -range * cos(degree) * cos(robot->pos->GetPose().a) -
-    //             range * sin(degree) * sin(robot->pos->GetPose().a) +
-    //             robot->robotPose.x;
 
-    // double y =  -range * cos(degree) * sin(robot->pos->GetPose().a) +
-    //             range * sin(degree) * cos(robot->pos->GetPose().a) +
-    //             robot->robotPose.y;
-
-
-
-
-    // std::cout << "Error: " 
-    //           << degree * 180 / M_PI << " "
-    //           << "(" << robot->otherRobot->GetGlobalPose().x << ", " << robot->otherRobot->GetGlobalPose().y << ") VS "
-    //           << "(" << x << ", " << y << ": "
-    //           << fabs(x - robot->otherRobot->GetGlobalPose().x) / 0.5 << ", " 
-    //           << fabs(y - robot->otherRobot->GetGlobalPose().y) / 0.5 
-    //           << std::endl;
     Stg::Pose avgDestinations;
     if (getDestinationBasedOnOtherObjectPoses(robot, otherRobot, avgDestinations))
     {
       return 0;
     }
 
-    // ModelPosition::Waypoint wp(Stg::Pose(x,y,robot->otherRobot->GetGlobalPose().z,0.),
-    //                                          Color("green"));
-    // ((ModelPosition*)robot->otherRobot)-> waypoints.push_back(wp);
-
-    // speedX = x - robot->posesOther[0].x; 
-    // speedY = y - robot->posesOther[0].y;          
-    // if (speedX == 0 && speedY == 0){
-    //   speedX = robot->posesOther[0].z;
-    //   speedY = robot->posesOther[0].a;
-    // }
-
-    // double speedXU = speedX / sqrt(speedX*speedX + speedY*speedY);
-    // double speedYU = speedY / sqrt(speedX*speedX + speedY*speedY);
-    // robot->lastDestination[0] = Stg::Pose(x+speedX*2 + speedXU*followdist, y+speedY*2 + speedYU*followdist, 0.,0.);
-    // robot->posesOther[0] = Stg::Pose(x,y,speedX,speedY);          
-
-    // ModelPosition::Waypoint wp1(robot->lastDestination[0],
-    //                                          Color("blue"));
-    // ((ModelPosition*)robot->otherRobot)-> waypoints.push_back(wp1);
-    // std::cout << "pose dest: " << robot->lastDestination[0].x << " " << robot->lastDestination[0].y << "\n"               
-    //       << "pose secn: " << x << " " << y << " rotation:" << robot->pos->GetPose().a * 180 / M_PI  << "\n" 
-    //       << "speed secn: " << speedX << " " << speedY << "\n" 
-    //       << std::endl;
-    // }
     setSpeed(robot,avgDestinations);
   }
 }

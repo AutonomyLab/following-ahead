@@ -137,6 +137,8 @@ include_directories(
 ## Declare a C++ library
 add_library(${PROJECT_NAME}
   src/pid.cpp
+  src/filter.cpp
+  src/robot.cpp
 )
 
 ## Add cmake target dependencies of the library
