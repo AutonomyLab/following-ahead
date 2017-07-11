@@ -20,16 +20,24 @@ def callback(helmetMsg, kinectMsg):
     )
 
     relativePose = np.dot(np.linalg.inv(kinectPose), helmetPose) 
+    relativeQuaternion = transform.transformations.quaternion_from_matrix(relativePose)
 
     relativePoseMsg = TransformStamped()
     relativePoseMsg.header.frame_id = "world"
     relativePoseMsg.child_frame_id = "person_follower/helmet_relative"
+    relativePoseMsg.transform.translation.x = relativePose[0, 3]
+    relativePoseMsg.transform.translation.y = relativePose[1, 3]
+    relativePoseMsg.transform.translation.z = relativePose[2, 3]
+    relativePoseMsg.transform.rotation.x = relativeQuaternion[0]
+    relativePoseMsg.transform.rotation.y = relativeQuaternion[1]
+    relativePoseMsg.transform.rotation.z = relativeQuaternion[2]
+    relativePoseMsg.transform.rotation.w = relativeQuaternion[3]
     relativePosePub.publish(relativePoseMsg)
 
     br = transform.TransformBroadcaster()
     br.sendTransform(
         (relativePose[0, 3], relativePose[1, 3], relativePose[2, 3]),
-        transform.transformations.quaternion_from_matrix(relativePose),
+        relativeQuaternion,
         rospy.Time.now(),
         relativePoseMsg.child_frame_id,
         "world"
@@ -39,7 +47,7 @@ if __name__ == '__main__':
     rospy.init_node('node_name')
 
     helmetSub = message_filters.Subscriber('/vicon/helmet/helmet', TransformStamped)
-    kinectSub = message_filters.Subscriber('/vicon/kkk/kkk', TransformStamped)
+    kinectSub = message_filters.Subscriber('/vicon/husky_follower/husky_follower', TransformStamped)
 
     ts = message_filters.TimeSynchronizer([helmetSub, kinectSub], 10)
     ts.registerCallback(callback)

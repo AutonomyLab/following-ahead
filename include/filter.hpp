@@ -8,14 +8,14 @@
 class Filter
 {
 private:
-	 cv::Point2f *points;
+	 cv::Point3f *points;
 	 unsigned int iterator;
 	 size_t length;
 public:
 	Filter(){};
 	Filter(int size);
-	int addPoint(cv::Point2f);
-	cv::Point2f getFilter();
+	int addPoint(cv::Point3f);
+	cv::Point3f getFilter();
 };
 
 #endif

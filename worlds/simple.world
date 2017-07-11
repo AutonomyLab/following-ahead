@@ -1,0 +1,89 @@
+# simple.world - basic world file example
+# Authors: Richard Vaughan
+# $Id$
+
+include "pioneer.inc"
+include "map.inc"
+include "sick.inc"
+
+# time to pause (in GUI mode) or quit (in headless mode (-g)) the simulation
+quit_time 3600 # 1 hour of simulated time
+
+paused 0
+
+resolution 0.02
+
+# configure the GUI window
+window
+(
+  size [ 928 1148 ] # in pixels
+  scale 186.985   # pixels per meter
+  center [ -0.172  -0.624 ]
+  rotate [ 0.000  -7.000 ]
+  			
+  show_data 1              # 1=on 0=off
+)
+
+# load an environment bitmap
+floorplan
+( 
+  name "cave"
+  size [160.000 160.000 0.800]
+  pose [0.000 0.000 0.000 0.000]
+  bitmap "bitmaps/simple.png"
+)
+
+pioneer2dx
+(
+  color "red"
+  # can refer to the robot by this name
+  name "r0"
+  pose [ -0.004 0.003 0.000 91.547 ] 
+
+  # pioneer2dx's sonars will be ranger:0 and the laser will be ranger:1
+  sicklaser( pose [ 0.000 0.000 0.000 0.000 ] ) 
+ 
+  # report error-free position in world coordinates
+   blobfinder( 
+      pose [0.000 0.000 0.000 180.000]
+      colors_count 6 
+      name "blob"
+      colors [ "red" "blue" "green" "cyan" "yellow" "magenta" ]  
+      alwayson 1
+      update_interval 1
+      fov 180
+      range 30.0
+      image [ 640 640 ]
+      pan 0
+    )
+    blobfinder( 
+      pose [0.000 0.000 0.000 0.000]
+      colors_count 6 
+      name "blob2"
+      colors [ "red" "blue" "green" "cyan" "yellow" "magenta" ]  
+      alwayson 1
+      update_interval 1
+      fov 180
+      range 30.0
+      image [ 640 640 ]
+      pan 0
+    )
+  localization "gps"
+  localization_origin [ 0 0 0 0 ]
+)
+
+pioneer2dx
+(
+  color "red"
+  # can refer to the robot by this name
+  name "r1"
+  pose [ 1.309 2.114 0.000 92.865 ] 
+
+  # pioneer2dx's sonars will be ranger:0 and the laser will be ranger:1
+  sicklaser( pose [ 0.000 0.000 0.000 0.000 ] ) 
+ 
+  # report error-free position in world coordinates
+
+  localization "gps"
+  localization_origin [ 0 0 0 0 ]
+)

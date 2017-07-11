@@ -1,0 +1,15 @@
+<launch>
+	<node pkg="stage_ros" type="stageros" name="stageros_node" args="$(find person_follower)/worlds/simple.world" />
+	
+	<node pkg="person_follower" type="simulation_interface_node" name="simulation_interface_node" output="screen" />
+	
+	<node pkg="person_follower" type="person_follower_node" name="person_follower_node" output="screen">
+		<remap from="/husky/odom" to="/robot_0/odom" />
+		<remap from="/husky/cmd_vel" to="/robot_0/cmd_vel" />
+	</node>
+	
+	<node pkg="joy" type="joy_node" name="joy_node" output="screen">
+		<remap from="/joy" to="/teleop/joy" />
+		<param name="dev" type="string" value="/dev/input/js0" />
+	</node>
+</launch>

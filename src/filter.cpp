@@ -6,26 +6,29 @@
 
 Filter::Filter(int size)
 {
-  points = new cv::Point2f[size];
+  points = new cv::Point3f[size];
   iterator = 0;
   length = size;
 }
 
-int Filter::addPoint(cv::Point2f point)
+int Filter::addPoint(cv::Point3f point)
 {
   points[iterator%length] = point;
+  iterator++;
   return 0;
 }
 
-cv::Point2f Filter::getFilter()
+cv::Point3f Filter::getFilter()
 {
-  cv::Point2f avg = cv::Point2f(0,0);
+  cv::Point3f avg = cv::Point3f(0,0,0);
   for (int i=0 ; i<length ; i++)
   {
     avg.x += points[i].x;
     avg.y += points[i].y;
+    avg.z += points[i].z;
   }
   avg.x = avg.x / (double)length;
   avg.y = avg.y / (double)length;
+  avg.z = avg.z / (double)length;
   return avg;
 }

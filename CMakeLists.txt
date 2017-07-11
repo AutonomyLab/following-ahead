@@ -20,9 +20,10 @@ find_package(catkin REQUIRED COMPONENTS
   yolo2
   message_filters
   pcl_ros
+  stage_ros
 )
 ## System dependencies are found with CMake's conventions
-# find_package(Boost REQUIRED COMPONENTS system)
+find_package(Boost REQUIRED COMPONENTS system thread)
 find_package(stage REQUIRED)
 
 
@@ -139,6 +140,8 @@ add_library(${PROJECT_NAME}
   src/pid.cpp
   src/filter.cpp
   src/robot.cpp
+  src/kalman.cpp
+  src/utils.cpp
 )
 
 ## Add cmake target dependencies of the library
@@ -150,6 +153,8 @@ add_library(${PROJECT_NAME}
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
 add_executable(person_follower_node src/person_follower_node.cpp)
+add_executable(simulation_interface_node src/simulation_interface_node.cpp)
+
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -160,9 +165,18 @@ add_executable(person_follower_node src/person_follower_node.cpp)
 ## Add cmake target dependencies of the executable
 ## same as for the library above
 add_dependencies(person_follower_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+add_dependencies(simulation_interface_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 ## Specify libraries to link a library or executable target against
 target_link_libraries(person_follower_node
+  ${catkin_LIBRARIES}
+  ${STAGE_LIBRARIES}
+  #${OpenCV_LIBRARIES}
+  ${OPENCV_LIB}
+  ${PROJECT_NAME}
+)
+
+target_link_libraries(simulation_interface_node
   ${catkin_LIBRARIES}
   ${STAGE_LIBRARIES}
   #${OpenCV_LIBRARIES}
