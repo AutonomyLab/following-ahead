@@ -13,8 +13,9 @@
 #include <geometry_msgs/Twist.h>
 #include <geometry_msgs/TransformStamped.h>
 #include <nav_msgs/Odometry.h>
-#include "kalman.hpp"
-
+#include <nav_msgs/GridCells.h>
+#include "person_kalman.hpp"
+#include "ParticleFilter.hpp"
 
 class Robot
 {
@@ -25,8 +26,8 @@ private:
 	Filter* robot_poses;
 	Filter* human_poses;
 	Filter* destination_pose;
-  	KalmanFilter *kalman_filter;
   	ros::Publisher pub_waypoints_;
+  	ros::Publisher pub_particles_;
 	double robot_prev_degree_dest;
 	cv::Point3f robot_prev_pose;
 	cv::Point3f human_prev_pose;
@@ -36,10 +37,14 @@ private:
 	PID pid_turn;
 	PID pid_cruse;
 	bool isDeadManActive;
+
+	ParticleFilter particle_filter_;
+	PersonKalman *person_kalman_;
 	
 	tf::TransformListener tf_listener;
 	tf::TransformBroadcaster tf_broadcaster;
 	tf::StampedTransform local_transform;
+	
 public:
 	Robot(ros::NodeHandle n);
 	void joyCallback(const sensor_msgs::Joy& msg);

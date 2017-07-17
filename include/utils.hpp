@@ -1,9 +1,11 @@
 #include <opencv2/core.hpp>
 #include <opencv2/opencv.hpp>
-#include "stage.hh"
+#include <ros/ros.h>
+#include <tf/transform_datatypes.h>
+#include <tf/transform_listener.h>
 
-cv::Mat pose2TransformationMatrix(Stg::Pose origin);
-cv::Mat pose2HomgeneousVector(Stg::Pose pose);
-Stg::Pose homogeneousVector2Pose(cv::Mat homogeneousVector);
+
 cv::Mat xytheta2TransformationMatrix(cv::Mat xytheta);
 cv::Mat xytheta2TransformationMatrix(cv::Point3f xytheta);
+cv::Point3f transformPoint(tf::StampedTransform transform, cv::Point3f point);
+cv::Point3f transformPoint(tf::Transform transform, cv::Point3f point);

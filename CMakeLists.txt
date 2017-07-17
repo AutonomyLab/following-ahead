@@ -24,7 +24,7 @@ find_package(catkin REQUIRED COMPONENTS
 )
 ## System dependencies are found with CMake's conventions
 find_package(Boost REQUIRED COMPONENTS system thread)
-find_package(stage REQUIRED)
+# find_package(stage REQUIRED)
 
 
 ## Uncomment this if the package has a setup.py. This macro ensures
@@ -120,7 +120,7 @@ catkin_package(
 )
 
 find_package(OpenCV 2 REQUIRED)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -std=gnu++11")
 
 ###########
 ## Build ##
@@ -132,7 +132,7 @@ include_directories(
 	include
 	${catkin_INCLUDE_DIRS}
 	${OpenCV_INCLUDE_DIRS}
-	${STAGE_INCLUDE_DIRS}
+	# ${STAGE_INCLUDE_DIRS}
 )
 
 ## Declare a C++ library
@@ -142,6 +142,8 @@ add_library(${PROJECT_NAME}
   src/robot.cpp
   src/kalman.cpp
   src/utils.cpp
+  src/ParticleFilter.cpp
+  src/person_kalman.cpp
 )
 
 ## Add cmake target dependencies of the library
@@ -170,7 +172,6 @@ add_dependencies(simulation_interface_node ${${PROJECT_NAME}_EXPORTED_TARGETS} $
 ## Specify libraries to link a library or executable target against
 target_link_libraries(person_follower_node
   ${catkin_LIBRARIES}
-  ${STAGE_LIBRARIES}
   #${OpenCV_LIBRARIES}
   ${OPENCV_LIB}
   ${PROJECT_NAME}
@@ -178,7 +179,6 @@ target_link_libraries(person_follower_node
 
 target_link_libraries(simulation_interface_node
   ${catkin_LIBRARIES}
-  ${STAGE_LIBRARIES}
   #${OpenCV_LIBRARIES}
   ${OPENCV_LIB}
   ${PROJECT_NAME}

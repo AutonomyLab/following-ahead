@@ -26,10 +26,6 @@
 #include <opencv2/opencv.hpp>
 
 #include "pid.h"
-#include "stage.hh"
-
-
-
 
 // void detectionCallback(const yolo2::ImageDetections::ConstPtr &detectionMsg, const sensor_msgs::Image::ConstPtr &depthMsg)
 // {

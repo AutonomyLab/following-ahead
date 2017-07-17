@@ -1,6 +1,10 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
+#include <cmath>
+
+#define FLOAT_EPSILON 0.01
+
 #define PERSON_FILTER_SIZE 1
 #define ROBOT_FILTER_SIZE 1
 #define DESTINATION_FILTER_SIZE 30
@@ -16,13 +20,58 @@
 #define STOP_DISTANCE 0.3
 #define avoidduration 10
 #define numberOfPosHist 1
-#define NUM_STATES 11
+
+#define NUM_STATES 6
 
 // if the estimated velocity is lower than this, assume it to be 0
 #define VELOCITY_THRESHOLD 0.01
 
 #define IMAGE_WIDTH 640
 #define IMAGE_HEIGHT 480
+
+#define NUM_PARTICLES 1000
+// at the start, the particles should be spread out more, hence the factor
+#define PARTICLE_INIT_NOISE_FACTOR_X 10
+#define PARTICLE_INIT_NOISE_FACTOR_Y 20
+
+#define PARTICLE_STOCHASTIC_VELOCITY_STDDEV 0.01
+// TODO: The blob noise should be modelled in pixels, not meters
+#define BLOB_NOISE_STDDEV_X 0.1
+#define BLOB_NOISE_STDDEV_Y 0.1
+
+
+// Kalman filter index:
+#define X_T_IDX 0
+#define Y_T_IDX 1
+#define X_T_1_IDX 2
+#define Y_T_1_IDX 3
+#define VEL_IDX 4
+#define THETA_IDX 5
+// Infinite impulse response (IIR) filter for velocity and orientation
+// higher these values, more importance to the new readings
+#define VEL_IIR_ALPHA 0.5
+#define THETA_IIR_ALPHA 0.5
+
+// process noise during the prediction step of EKF
+#define X_T_PROCESS_NOISE_VAR 0.01
+#define Y_T_PROCESS_NOISE_VAR 0.01
+#define X_T_1_PROCESS_NOISE_VAR 0.01
+#define Y_T_1_PROCESS_NOISE_VAR 0.01
+#define VEL_PROCESS_NOISE_VAR 0.01
+#define THETA_PROCESS_NOISE_VAR 0.01
+
+// measurement noise during the correction step of EKF
+// TODO: they are in meters, change them to be in pixels
+#define X_T_MEASUREMENT_NOISE_VAR 0.001
+#define Y_T_MEASUREMENT_NOISE_VAR 0.001
+
+// initial error state covariance
+#define X_T_INIT_ERROR_VAR 0.01
+#define Y_T_INIT_ERROR_VAR 0.01
+#define X_T_1_INIT_ERROR_VAR 0.01
+#define Y_T_1_INIT_ERROR_VAR 0.01
+#define VEL_INIT_ERROR_VAR 0.01
+#define THETA_INIT_ERROR_VAR 0.01
 
 #define FOV 180.0
 
@@ -31,30 +80,5 @@ static const float focalLengthX = 538.914261;
 static const float focalLengthY = 504.416883;
 static const float cameraPrincipalX = 311.027555;
 static const float cameraPrincipalY = 260.575111;
-static const float Q0 = 0.05;
-static const float Q1 = 0.05;
-static const float Q2 = 0.09;
-static const float Q3 = 0.15;
-static const float Q4 = 0.19;
-static const float Q5 = 0.05; // 0.15;
-static const float Q6 = 0.05; // 0.15;
-static const float Q7 = 0.15; // 0.25;
-static const float Q8 = 0.15; // 0.25;
-
-static const float R0 = 0.05;
-static const float R1 = 0.02;
-static const float R2 = 0.05;
-static const float R3 = 0.05;
-
-static const float P0 = 0.01;
-static const float P1 = 0.01;
-static const float P2 = 0.01;
-static const float P3 = 0.01;
-static const float P4 = 0.01;
-static const float P5 = 0.01; // 1; // Error position of person x
-static const float P6 = 0.01; // 1; // Error position of person y
-static const float P7 = 0.1; // 0.5;
-static const float P8 = 0.1; // 0.5;
-
 
 #endif

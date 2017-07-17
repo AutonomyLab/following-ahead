@@ -1,54 +1,72 @@
 #include "utils.hpp"
+#include <cmath>
+#include <cfloat>
 
-cv::Mat pose2TransformationMatrix(Stg::Pose origin)
+
+cv::Mat xytheta2TransformationMatrix(cv::Mat xytheta)
 {
+  float x = xytheta.at<float>(0, 0);
+  float y = xytheta.at<float>(1, 0);
+  float a = xytheta.at<float>(2, 0);
+
   cv::Mat pose = cv::Mat::eye(3, 3, CV_32F);
-  pose.at<float>(0, 0) = cos(origin.a);
-  pose.at<float>(0, 1) = -sin(origin.a);
+  pose.at<float>(0, 0) = cos(a);
+  pose.at<float>(0, 1) = -sin(a);
   pose.at<float>(1, 0) = -pose.at<float>(0, 1);
   pose.at<float>(1, 1) = pose.at<float>(0, 0);
-  pose.at<float>(0, 2) = origin.x;
-  pose.at<float>(1, 2) = origin.y;
+  pose.at<float>(0, 2) = x;
+  pose.at<float>(1, 2) = y;
 
   return pose;
 }
 
-cv::Mat xytheta2TransformationMatrix(cv::Mat xytheta)
-{
-  return pose2TransformationMatrix(
-    Stg::Pose(
-      xytheta.at<float>(0, 0),
-      xytheta.at<float>(1, 0),
-      0,
-      xytheta.at<float>(2, 0)
-    )
-  );
-}
-
 cv::Mat xytheta2TransformationMatrix(cv::Point3f xytheta)
 {
-  return pose2TransformationMatrix(
-    Stg::Pose(
-      xytheta.x,
-      xytheta.y,
-      0,
-      xytheta.z
-    )
+  cv::Mat mat(3, 1, CV_32F);
+  mat.at<float>(0, 0) = xytheta.x;
+  mat.at<float>(1, 0) = xytheta.y;
+  mat.at<float>(2, 0) = xytheta.z;
+
+  return xytheta2TransformationMatrix(mat);
+}
+
+cv::Point3f transformPoint(tf::StampedTransform transform, cv::Point3f point)
+{
+  return transformPoint(static_cast<tf::Transform>(transform), point);
+
+  // tf::Vector3 point_vect(point.x, point.y, 0);
+  // tf::Vector3 transformed_point_vect = transform(point_vect);
+
+  // if  (   std::isnan(transformed_point_vect.getX()) ||
+  //         std::isnan(transformed_point_vect.getY()) ||
+  //         std::isnan(transformed_point_vect.getZ())
+  //     )
+  // {
+  //   ROS_ERROR("NaN in transformation");
+  // }
+  // return cv::Point3f(
+  //   transformed_point_vect.getX(),
+  //   transformed_point_vect.getY(),
+  //   transformed_point_vect.getZ()
+  // );
+}
+
+cv::Point3f transformPoint(tf::Transform transform, cv::Point3f point)
+{
+  tf::Vector3 point_vect(point.x, point.y, 0);
+  tf::Vector3 transformed_point_vect = transform(point_vect);
+
+  if  (   std::isnan(transformed_point_vect.getX()) ||
+          std::isnan(transformed_point_vect.getY()) ||
+          std::isnan(transformed_point_vect.getZ())
+      )
+  {
+    ROS_ERROR("NaN in transformation");
+  }
+
+  return cv::Point3f(
+    transformed_point_vect.getX(),
+    transformed_point_vect.getY(),
+    transformed_point_vect.getZ()
   );
-}
-
-cv::Mat pose2HomgeneousVector(Stg::Pose pose)
-{
-  cv::Mat homogeneousVector(3, 1, CV_32F);
-  homogeneousVector.at<float>(0, 0) = pose.x;
-  homogeneousVector.at<float>(1, 0) = pose.y;
-  homogeneousVector.at<float>(2, 0) = 1.0f;
-
-  return homogeneousVector.clone();
-}
-
-Stg::Pose homogeneousVector2Pose(cv::Mat homogeneousVector)
-{
-  assert(homogeneousVector.rows==3 && homogeneousVector.cols==1);
-  return Stg::Pose( homogeneousVector.at<float>(0, 0),  homogeneousVector.at<float>(1, 0), 0, 0 );
 }

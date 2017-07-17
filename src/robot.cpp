@@ -22,42 +22,34 @@ cv::Point3f Robot::getHumanPose()
 	return human_poses->getFilter();
 }
 
-Robot::Robot(  ros::NodeHandle n)
+Robot::Robot(ros::NodeHandle n)
 {
   cv::Mat Q = cv::Mat::zeros(NUM_STATES, NUM_STATES, CV_32F);
-  Q.at<float>(0, 0) = Q0;
-  Q.at<float>(1, 1) = Q1;
-  Q.at<float>(2, 2) = Q2;
-  Q.at<float>(3, 3) = Q3;
-  Q.at<float>(4, 4) = Q4;
-  Q.at<float>(5, 5) = Q5;
-  Q.at<float>(6, 6) = Q6;
-  Q.at<float>(7, 7) = Q7;
-  Q.at<float>(8, 8) = Q8;
+  Q.at<float>(X_T_IDX, X_T_IDX) = X_T_PROCESS_NOISE_VAR;
+  Q.at<float>(Y_T_IDX, Y_T_IDX) = Y_T_PROCESS_NOISE_VAR;
+  Q.at<float>(X_T_1_IDX, X_T_1_IDX) = X_T_1_PROCESS_NOISE_VAR;
+  Q.at<float>(Y_T_1_IDX, Y_T_1_IDX) = Y_T_1_PROCESS_NOISE_VAR;
+  Q.at<float>(VEL_IDX, VEL_IDX) = VEL_PROCESS_NOISE_VAR;
+  Q.at<float>(THETA_IDX, THETA_IDX) = THETA_PROCESS_NOISE_VAR;
 
-  cv::Mat R = cv::Mat::zeros(4, 4, CV_32F);
-  R.at<float>(0, 0) = R0;
-  R.at<float>(1, 1) = R1;
-  R.at<float>(2, 2) = R2;
-  R.at<float>(3, 3) = R3;
+  cv::Mat R = cv::Mat::zeros(2, 2, CV_32F);
+  R.at<float>(0, 0) = X_T_MEASUREMENT_NOISE_VAR;
+  R.at<float>(1, 1) = Y_T_MEASUREMENT_NOISE_VAR;
 
   cv::Mat P = cv::Mat::eye(NUM_STATES, NUM_STATES, CV_32F);
-  P.at<float>(0, 0) = P0;
-  P.at<float>(1, 1) = P1;
-  P.at<float>(2, 2) = P2;
-  P.at<float>(3, 3) = P3;
-  P.at<float>(4, 4) = P4;
-  P.at<float>(5, 5) = P5;
-  P.at<float>(6, 6) = P6;
-  P.at<float>(7, 7) = P7;
-  P.at<float>(8, 8) = P8;
-  P.at<float>(9, 9) = P6;
-  P.at<float>(10, 10) = P7;
+  P.at<float>(0, 0) = X_T_INIT_ERROR_VAR;
+  P.at<float>(1, 1) = Y_T_INIT_ERROR_VAR;
+  P.at<float>(2, 2) = X_T_1_INIT_ERROR_VAR;
+  P.at<float>(3, 3) = Y_T_1_INIT_ERROR_VAR;
+  P.at<float>(4, 4) = VEL_INIT_ERROR_VAR;
+  P.at<float>(5, 5) = THETA_INIT_ERROR_VAR;
 
   // pub_waypoints_ = nh_.advertise<sensor_msgs::PointCloud>("/person_follower/waypoints", 1);
 
-  kalman_filter = new KalmanFilter(0.1, Q, R, P);
+  person_kalman_ = new PersonKalman(0.1, Q, R, P);
+
   cmd_vel_publisher =  n.advertise<geometry_msgs::Twist>("/husky/cmd_vel", 1);
+  pub_particles_ = n.advertise<nav_msgs::GridCells>("person_follower/person_particle", 1);
   isDeadManActive = false;
 	robot_poses = new Filter(ROBOT_FILTER_SIZE);
 	human_poses = new Filter(PERSON_FILTER_SIZE);
@@ -72,32 +64,6 @@ Robot::Robot(  ros::NodeHandle n)
   referenceLastUpdated = 0;
 	pid_turn.set(AVOID_TURN, -AVOID_TURN, AVOID_TURN, 0.0100, 0.01);
   pid_cruse.set(CRUISE_SPEED, -CRUISE_SPEED, -CRUISE_SPEED  , .0100, 0.001);
-
-  if (tf_listener.waitForTransform( 
-      "robot_0/base_footprint",
-      "robot_0/odom",
-      ros::Time(0),
-      ros::Duration( 2 )
-    )
-  )
-  {
-    try
-    {
-      
-      tf_listener.lookupTransform("robot_0/odom", "robot_0/base_footprint",
-                                  ros::Time(0), local_transform);
-    }
-    catch (tf::TransformException ex)
-    {
-      ROS_ERROR("%s", ex.what());
-      // ros::Duration(1.0).sleep();
-    }
-  }
-  else
-  {
-    ROS_ERROR("Initial transform not found!!!");
-    exit(0);
-  }
 }
 
 void Robot::joyCallback(const sensor_msgs::Joy& msg)
@@ -121,50 +87,203 @@ void Robot::myBlobUpdate (const geometry_msgs::TransformStamped& msg)
   // double roll, pitch, yaw;
   // m.getRPY(roll, pitch, yaw);
   human_relative_pose = cv::Point3f(msg.transform.translation.x, msg.transform.translation.y, 0);
-  double speedX = 0;
-  double speedY = 0;
 
-  // maxblobx = blob->scan_width; //?
+  tf::StampedTransform r0_T_map; 
+  try
+  {
+    
+    tf_listener.lookupTransform("robot_0/base_footprint", "map",
+                                ros::Time(0), r0_T_map);
+  }
+  catch (tf::TransformException ex)
+  {
+    ROS_ERROR("TF error %s", ex.what());
+    return;
+    // ros::Duration(1.0).sleep();
+  }
+
+  tf::Transform transform_r0_r1;
+  transform_r0_r1.setOrigin( tf::Vector3(msg.transform.translation.x, msg.transform.translation.y, 0.0) );
+  transform_r0_r1.setRotation(r0_T_map.getRotation());
+  tf_broadcaster.sendTransform(tf::StampedTransform(transform_r0_r1, ros::Time::now(), "robot_0/base_footprint", "robot_1/base_footprint"));
+
+  ROS_INFO("Broadcasting robot_0, robot_1 tf");
+
+  if (!particle_filter_.isInitialized())
+  {
+    particle_filter_.init(
+      NUM_PARTICLES, BLOB_NOISE_STDDEV_X, BLOB_NOISE_STDDEV_Y, PARTICLE_STOCHASTIC_VELOCITY_STDDEV,
+      human_relative_pose, r0_T_map 
+    );
+    ROS_INFO("particle_filter_ initialized!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+  }
+  else
+  {
+    // update the damn particles here based on measurement
+    particle_filter_.update(human_relative_pose, r0_T_map);
+  }
+
+  // lets publish particles
+  nav_msgs::GridCells particles;
+  particles.header.stamp = ros::Time::now();
+  particles.header.frame_id = "map";
+  particles.cell_width = 0.1  ;
+  particles.cell_height = 0.1;
+  
+  ROS_INFO("Num particles: %d", particle_filter_.getNumParticles());
+  for (size_t i = 0, len = particle_filter_.getNumParticles(); i < len; i++)
+  {
+    ParticleFilter::Particle particle = particle_filter_.getParticleAt(i);
+    cv::Point3f particle_state = particle.getState();
+
+    geometry_msgs::Point point;
+    point.x = particle_state.x;
+    point.y = particle_state.y;
+    point.z = 0;
+    particles.cells.push_back(point);
+
+    if (fabs(point.x) < 0.001 && fabs(point.y) < 0.001)
+    {
+      ROS_ERROR("Particle %d at origin", i);
+    }
+  }
+  
+  pub_particles_.publish(particles);
 
   
+  
+
+
+
+
+
+
+  cv::Point3f robot_pose;
+  cv::Mat state = person_kalman_->state();
+  
+  // global pose
+  cv::Point3f human_global_pose = transformPoint(r0_T_map.inverse(), human_relative_pose);
+  // measurement
+  cv::Mat y = cv::Mat(2, 1, CV_32F);
+  y.at<float>(0, 0) = human_global_pose.x;
+  y.at<float>(1, 0) = human_global_pose.y;
+
+  if (!person_kalman_->isInitialized())
+  {
+    cv::Mat initState = cv::Mat::zeros(NUM_STATES, 1, CV_32F);
+    initState.at<float>(X_T_IDX, 0) = human_global_pose.x;
+    initState.at<float>(Y_T_IDX, 0) = human_global_pose.y;
+    initState.at<float>(X_T_1_IDX, 0) = human_global_pose.x;
+    initState.at<float>(Y_T_1_IDX, 0) = human_global_pose.y;
+    initState.at<float>(VEL_IDX, 0) = 0;
+    initState.at<float>(THETA_IDX, 0) = 0;
+
+    person_kalman_->init(0, initState);
+  }
+  
+  person_kalman_->update(y, 0.1);
+  cv::Mat new_state = person_kalman_->state();
+
+  // TODO: MAKE THE TFs ROS PARAM!!!
+  // broadcast the estimated person position frame with respect to the global frame
+  tf::StampedTransform person_kalman_transform;
+  person_kalman_transform.child_frame_id_ = "person_kalman"; // source
+  person_kalman_transform.frame_id_ = "map"; // target
+  person_kalman_transform.stamp_ = ros::Time::now();
+  
+  float est_x = new_state.at<float>(X_T_IDX, 0);
+  float est_y = new_state.at<float>(Y_T_IDX, 0);
+  float est_theta = new_state.at<float>(THETA_IDX, 0);
+
+  if (!std::isnan(est_x) && !std::isnan(est_y))
+  {
+    person_kalman_transform.setOrigin( 
+      tf::Vector3(
+        est_x,
+        est_y,
+        0
+      ) 
+    );
+  }
+  else
+  {
+    ROS_ERROR("Kalman filter returned NaN position");
+  }
+
+  if (!std::isnan(est_theta))
+  {  
+    tf::Quaternion q;
+    q.setRPY(0, 0, est_theta);
+    person_kalman_transform.setRotation(q);
+  }
+  else
+  {
+    person_kalman_transform.setRotation(tf::Quaternion(0, 0, 0, 1));
+    ROS_ERROR("Kalman filter returned NaN orientation");
+  }
+
+  tf_broadcaster.sendTransform(person_kalman_transform);
+
+  // // ROS_INFO("Robot Pose: %f, %f, %f", robot_pose.x, robot_pose.y, robot_pose.z);
+  // cv::Point3f avg_dest = destination_pose->getFilter();
+
+  // transform.setOrigin( tf::Vector3(avg_dest.x, avg_dest.y, 0.0) );
+  // q.setRPY(0, 0, avg_dest.z);
+  // transform.setRotation(q);
+  // tf_broadcaster.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "local_frame", "destination"));
+
+  // transform.setOrigin( tf::Vector3(state.at<float>(5, 0), state.at<float>(6, 0), 0.0) );
+  // q.setRPY(0, 0, 0);
+  // transform.setRotation(q);
+  // tf_broadcaster.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "local_frame", "person"));
+
+  // cv::Point3f avgDestinations;
+  // if (calculateDistination(avgDestinations))
+  // {
+  //   ROS_ERROR("calculation error");
+  //   return;
+  // }
+
+  // publishCmdVel(avgDestinations);
+
 }
 
 //-------------------------avg_dest is return parameter of this function ------------
 int Robot::calculateDistination(cv::Point3f& avg_dest)
 {
 	//-----------------------adding new point to human pose history--------------------
-	human_poses->addPoint(human_relative_pose);
-  // std::cout << "human pose: "<< human_relative_pose << std::endl;
+	// human_poses->addPoint(human_relative_pose);
+ //  // std::cout << "human pose: "<< human_relative_pose << std::endl;
 
-  //-----------------------gitting pos history average-------------------------------
-  cv::Point3f human_avg_pose = cv::Point3f(kalman_filter->state().at<float>(5,0),kalman_filter->state().at<float>(6,0),0); 
+ //  //-----------------------gitting pos history average-------------------------------
+ //  cv::Point3f human_avg_pose = cv::Point3f(kalman_filter->state().at<float>(5,0),kalman_filter->state().at<float>(6,0),0); 
 
-  double speedX = kalman_filter->state().at<float>(7,0)*.1; 
-  double speedY = kalman_filter->state().at<float>(8,0)*.1; 
+ //  double speedX = kalman_filter->state().at<float>(7,0)*.1; 
+ //  double speedY = kalman_filter->state().at<float>(8,0)*.1; 
 
-  speedX = ( fabs(speedX) < VELOCITY_THRESHOLD ) ? 0 : speedX;
-  speedY = ( fabs(speedY) < VELOCITY_THRESHOLD ) ? 0 : speedY;
+ //  speedX = ( fabs(speedX) < VELOCITY_THRESHOLD ) ? 0 : speedX;
+ //  speedY = ( fabs(speedY) < VELOCITY_THRESHOLD ) ? 0 : speedY;
       
-  if (speedX == 0 && speedY == 0)
-  {
-    speedX = human_prev_vel.x;
-    speedY = human_prev_vel.y;
-  }
-  human_prev_pose = cv::Point3f(human_avg_pose.x,human_avg_pose.y,0);
-  human_prev_vel = cv::Point3f(speedX,speedY,0);
-  //----------------avoid deviding by 0----------------------------------------------
-  if (speedX*speedX + speedY*speedY == 0){   
-    return 1;
-  }
-  double speedXU = speedX / sqrt(speedX*speedX + speedY*speedY);
-  double speedYU = speedY / sqrt(speedX*speedX + speedY*speedY);
-  destination_pose->addPoint(cv::Point3f(human_avg_pose.x+speedX*2 + speedXU*FOLLOW_DIST
-  													, human_avg_pose.y+speedY*2 + speedYU*FOLLOW_DIST
-  													,0
-  													));
-  avg_dest = destination_pose->getFilter();
+ //  if (speedX == 0 && speedY == 0)
+ //  {
+ //    speedX = human_prev_vel.x;
+ //    speedY = human_prev_vel.y;
+ //  }
+ //  human_prev_pose = cv::Point3f(human_avg_pose.x,human_avg_pose.y,0);
+ //  human_prev_vel = cv::Point3f(speedX,speedY,0);
+ //  //----------------avoid deviding by 0----------------------------------------------
+ //  if (speedX*speedX + speedY*speedY == 0){   
+ //    return 1;
+ //  }
+ //  double speedXU = speedX / sqrt(speedX*speedX + speedY*speedY);
+ //  double speedYU = speedY / sqrt(speedX*speedX + speedY*speedY);
+ //  destination_pose->addPoint(cv::Point3f(human_avg_pose.x+speedX*2 + speedXU*FOLLOW_DIST
+ //  													, human_avg_pose.y+speedY*2 + speedYU*FOLLOW_DIST
+ //  													,0
+ //  													));
+ //  avg_dest = destination_pose->getFilter();
   
-  return 0;
+ //  return 0;
 }
 
 
@@ -220,140 +339,140 @@ int Robot::publishCmdVel(cv::Point3f destination)
 
 void Robot::odometryCallback(const nav_msgs::Odometry& msg)
 {
-  cv::Point3f robot_pose;
-  cv::Mat state = kalman_filter->state();
+  // cv::Point3f robot_pose;
+  // cv::Mat state = kalman_filter->state();
     
-  if (referenceLastUpdated >= NUM_UPDATE_REF_FRAME)
-  {
-    robot_pose = robot_poses->getFilter();
-    cv::Mat oldState = kalman_filter->state();
+  // if (referenceLastUpdated >= NUM_UPDATE_REF_FRAME)
+  // {
+  //   robot_pose = robot_poses->getFilter();
+  //   cv::Mat oldState = kalman_filter->state();
     
-    float oldVelOther_x = oldState.at<float>(7, 0);
-    float oldVelOther_y = oldState.at<float>(8, 0);
+  //   float oldVelOther_x = oldState.at<float>(7, 0);
+  //   float oldVelOther_y = oldState.at<float>(8, 0);
 
-    cv::Mat rnew_T_r0 = xytheta2TransformationMatrix(robot_pose).inv();
+  //   cv::Mat rnew_T_r0 = xytheta2TransformationMatrix(robot_pose).inv();
 
-    cv::Mat r0_v(2, 1, CV_32F);
-    r0_v.at<float>(0, 0) = oldVelOther_x;
-    r0_v.at<float>(1, 0) = oldVelOther_y;
-    cv::Mat rnew_v = rnew_T_r0.rowRange(0, 2).colRange(0, 2) * r0_v;
+  //   cv::Mat r0_v(2, 1, CV_32F);
+  //   r0_v.at<float>(0, 0) = oldVelOther_x;
+  //   r0_v.at<float>(1, 0) = oldVelOther_y;
+  //   cv::Mat rnew_v = rnew_T_r0.rowRange(0, 2).colRange(0, 2) * r0_v;
 
-    cv::Mat r0_previous_human_position = cv::Mat::zeros(3, 1, CV_32F);
-    r0_previous_human_position.at<float>(0, 0) = oldState.at<float>(9, 0);
-    r0_previous_human_position.at<float>(1, 0) = oldState.at<float>(10, 0);
-    cv::Mat rnew_previous_human_position = rnew_T_r0 * r0_previous_human_position;
-
-
-    robot_poses->addPoint(cv::Point3f(0, 0, 0));
-    robot_prev_pose = cv::Point3f(0, 0, 0);
-    referenceLastUpdated = 0;
-    robot_pose = robot_prev_pose;
+  //   cv::Mat r0_previous_human_position = cv::Mat::zeros(3, 1, CV_32F);
+  //   r0_previous_human_position.at<float>(0, 0) = oldState.at<float>(9, 0);
+  //   r0_previous_human_position.at<float>(1, 0) = oldState.at<float>(10, 0);
+  //   cv::Mat rnew_previous_human_position = rnew_T_r0 * r0_previous_human_position;
 
 
-    cv::Mat newState = cv::Mat::zeros(11, 1, CV_32F);
-    newState.at<float>(3, 0) = oldState.at<float>(3, 0);
-    newState.at<float>(4, 0) = oldState.at<float>(4, 0);
-    newState.at<float>(5, 0) = human_relative_pose.x;
-    newState.at<float>(6, 0) = human_relative_pose.y;
-    newState.at<float>(7, 0) = rnew_v.at<float>(0, 0);
-    newState.at<float>(8, 0) = rnew_v.at<float>(1, 0);
-    newState.at<float>(9, 0) = rnew_previous_human_position.at<float>(0, 0);
-    newState.at<float>(10, 0) = rnew_previous_human_position.at<float>(1, 0);
+  //   robot_poses->addPoint(cv::Point3f(0, 0, 0));
+  //   robot_prev_pose = cv::Point3f(0, 0, 0);
+  //   referenceLastUpdated = 0;
+  //   robot_pose = robot_prev_pose;
+
+
+  //   cv::Mat newState = cv::Mat::zeros(11, 1, CV_32F);
+  //   newState.at<float>(3, 0) = oldState.at<float>(3, 0);
+  //   newState.at<float>(4, 0) = oldState.at<float>(4, 0);
+  //   newState.at<float>(5, 0) = human_relative_pose.x;
+  //   newState.at<float>(6, 0) = human_relative_pose.y;
+  //   newState.at<float>(7, 0) = rnew_v.at<float>(0, 0);
+  //   newState.at<float>(8, 0) = rnew_v.at<float>(1, 0);
+  //   newState.at<float>(9, 0) = rnew_previous_human_position.at<float>(0, 0);
+  //   newState.at<float>(10, 0) = rnew_previous_human_position.at<float>(1, 0);
   
-    kalman_filter->init(0, newState);
+  //   kalman_filter->init(0, newState);
 
-    state = kalman_filter->state();
+  //   state = kalman_filter->state();
 
-    // read the robot global position here as that is going to be our origin
-    try
-    {
-      tf_listener.lookupTransform("robot_0/odom", "robot_0/base_footprint",  
-                                  ros::Time(0), local_transform);
-    }
-    catch (tf::TransformException ex)
-    {
-      ROS_ERROR("%s", ex.what());
-      exit(0);
-      // ros::Duration(1.0).sleep();
-    }
-  }
-  else
-  {
-    double v_odom = msg.twist.twist.linear.x;  
-    double omega_odom = msg.twist.twist.angular.z ;  
+  //   // read the robot global position here as that is going to be our origin
+  //   try
+  //   {
+  //     tf_listener.lookupTransform("robot_0/odom", "robot_0/base_footprint",  
+  //                                 ros::Time(0), local_transform);
+  //   }
+  //   catch (tf::TransformException ex)
+  //   {
+  //     ROS_ERROR("%s", ex.what());
+  //     exit(0);
+  //     // ros::Duration(1.0).sleep();
+  //   }
+  // }
+  // else
+  // {
+  //   double v_odom = msg.twist.twist.linear.x;  
+  //   double omega_odom = msg.twist.twist.angular.z ;  
 
-    double omega_cmd_vel = robot_prev_cmd_vel.z;
-    double v_cmd_vel = robot_prev_cmd_vel.x;
+  //   double omega_cmd_vel = robot_prev_cmd_vel.z;
+  //   double v_cmd_vel = robot_prev_cmd_vel.x;
 
-    // measurement
-    cv::Mat y = cv::Mat(4, 1, CV_32F);
-    y.at<float>(0, 0) = v_odom;
-    y.at<float>(1, 0) = omega_odom;
-    y.at<float>(2, 0) = human_relative_pose.x;
-    y.at<float>(3, 0) = human_relative_pose.y;
+  //   // measurement
+  //   cv::Mat y = cv::Mat(4, 1, CV_32F);
+  //   y.at<float>(0, 0) = v_odom;
+  //   y.at<float>(1, 0) = omega_odom;
+  //   y.at<float>(2, 0) = human_relative_pose.x;
+  //   y.at<float>(3, 0) = human_relative_pose.y;
 
-    // control input
-    cv::Mat u = cv::Mat(2, 1, CV_32F);
-    u.at<float>(0, 0) = v_cmd_vel;
-    u.at<float>(1, 0) = omega_cmd_vel;
+  //   // control input
+  //   cv::Mat u = cv::Mat(2, 1, CV_32F);
+  //   u.at<float>(0, 0) = v_cmd_vel;
+  //   u.at<float>(1, 0) = omega_cmd_vel;
 
-    if (!kalman_filter->isInitialized())
-    {
-      cv::Mat initState = cv::Mat::zeros(NUM_STATES, 1, CV_32F);
-      initState.at<float>(5, 0) = human_poses->getFilter().x;
-      initState.at<float>(6, 0) = human_poses->getFilter().y;
-      initState.at<float>(9, 0) = human_poses->getFilter().x;
-      initState.at<float>(10, 0) = human_poses->getFilter().y;
+  //   if (!kalman_filter->isInitialized())
+  //   {
+  //     cv::Mat initState = cv::Mat::zeros(NUM_STATES, 1, CV_32F);
+  //     initState.at<float>(5, 0) = human_poses->getFilter().x;
+  //     initState.at<float>(6, 0) = human_poses->getFilter().y;
+  //     initState.at<float>(9, 0) = human_poses->getFilter().x;
+  //     initState.at<float>(10, 0) = human_poses->getFilter().y;
 
-      kalman_filter->init(0, initState);
-    }
+  //     kalman_filter->init(0, initState);
+  //   }
     
-    kalman_filter->update(y, 0.1, u);
+  //   kalman_filter->update(y, 0.1, u);
 
-    robot_pose.x = state.at<float>(0, 0);
-    robot_pose.y = state.at<float>(1, 0);
-    robot_pose.z = state.at<float>(2, 0);
-    robot_pose.z = atan2(sin(robot_pose.z), cos(robot_pose.z));
-    robot_poses->addPoint(robot_pose);
+  //   robot_pose.x = state.at<float>(0, 0);
+  //   robot_pose.y = state.at<float>(1, 0);
+  //   robot_pose.z = state.at<float>(2, 0);
+  //   robot_pose.z = atan2(sin(robot_pose.z), cos(robot_pose.z));
+  //   robot_poses->addPoint(robot_pose);
     
-  }
+  // }
+  // // TODO: MAKE THE TFs ROS PARAM!!!
+  // // broadcast the local frame with respect to the global frame
+  // local_transform.child_frame_id_ = "local_frame"; // source
+  // local_transform.frame_id_ = "robot_0/odom"; // target
+  // local_transform.stamp_ = ros::Time::now();
+  // tf_broadcaster.sendTransform(local_transform);
 
-  // broadcast the local frame with respect to the global frame
-  local_transform.child_frame_id_ = "local_frame"; // source
-  local_transform.frame_id_ = "robot_0/odom"; // target
-  local_transform.stamp_ = ros::Time::now();
-  tf_broadcaster.sendTransform(local_transform);
+  // tf::Transform transform;
+  // transform.setOrigin( tf::Vector3(robot_pose.x, robot_pose.y, 0.0) );
+  // tf::Quaternion q;
+  // q.setRPY(0, 0, robot_pose.z);
+  // transform.setRotation(q);
+  // tf_broadcaster.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "local_frame", "robot"));
 
-  tf::Transform transform;
-  transform.setOrigin( tf::Vector3(robot_pose.x, robot_pose.y, 0.0) );
-  tf::Quaternion q;
-  q.setRPY(0, 0, robot_pose.z);
-  transform.setRotation(q);
-  tf_broadcaster.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "local_frame", "robot"));
+  // // ROS_INFO("Robot Pose: %f, %f, %f", robot_pose.x, robot_pose.y, robot_pose.z);
+  // cv::Point3f avg_dest = destination_pose->getFilter();
 
-  // ROS_INFO("Robot Pose: %f, %f, %f", robot_pose.x, robot_pose.y, robot_pose.z);
-  cv::Point3f avg_dest = destination_pose->getFilter();
+  // transform.setOrigin( tf::Vector3(avg_dest.x, avg_dest.y, 0.0) );
+  // q.setRPY(0, 0, avg_dest.z);
+  // transform.setRotation(q);
+  // tf_broadcaster.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "local_frame", "destination"));
 
-  transform.setOrigin( tf::Vector3(avg_dest.x, avg_dest.y, 0.0) );
-  q.setRPY(0, 0, avg_dest.z);
-  transform.setRotation(q);
-  tf_broadcaster.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "local_frame", "destination"));
+  // transform.setOrigin( tf::Vector3(state.at<float>(5, 0), state.at<float>(6, 0), 0.0) );
+  // q.setRPY(0, 0, 0);
+  // transform.setRotation(q);
+  // tf_broadcaster.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "local_frame", "person"));
 
-  transform.setOrigin( tf::Vector3(state.at<float>(5, 0), state.at<float>(6, 0), 0.0) );
-  q.setRPY(0, 0, 0);
-  transform.setRotation(q);
-  tf_broadcaster.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "local_frame", "person"));
+  // cv::Point3f avgDestinations;
+  // if (calculateDistination(avgDestinations))
+  // {
+  //   ROS_ERROR("calculation error");
+  //   return;
+  // }
 
-  cv::Point3f avgDestinations;
-  if (calculateDistination(avgDestinations))
-  {
-    ROS_ERROR("calculation error");
-    return;
-  }
-
-  publishCmdVel(avgDestinations);
+  // publishCmdVel(avgDestinations);
 
   
-  referenceLastUpdated++;
+  // referenceLastUpdated++;
 }
 
