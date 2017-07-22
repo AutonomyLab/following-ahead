@@ -20,6 +20,7 @@
 class Robot
 {
 private:
+	int time;
 	ros::Publisher cmd_vel_publisher;
 	tf::TransformListener listener;
 	int referenceLastUpdated;
@@ -44,6 +45,8 @@ private:
 	tf::TransformListener tf_listener;
 	tf::TransformBroadcaster tf_broadcaster;
 	tf::StampedTransform local_transform;
+
+	ros::Publisher pub_nav_goal_;
 	
 public:
 	Robot(ros::NodeHandle n);

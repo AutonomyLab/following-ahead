@@ -10,6 +10,8 @@
 #include <tf/transform_datatypes.h>
 #include <tf/transform_broadcaster.h>
 #include <nav_msgs/Odometry.h>
+#include <geometry_msgs/PoseStamped.h>
+#include <geometry_msgs/Quaternion.h>
 #include "utils.hpp"
 
 cv::Point3f Robot::getRobotPose()
@@ -50,6 +52,8 @@ Robot::Robot(ros::NodeHandle n)
 
   cmd_vel_publisher =  n.advertise<geometry_msgs::Twist>("/husky/cmd_vel", 1);
   pub_particles_ = n.advertise<nav_msgs::GridCells>("person_follower/person_particle", 1);
+  pub_nav_goal_ = n.advertise<geometry_msgs::PoseStamped>("move_base_simple/goal_unthrottled", 1);
+
   isDeadManActive = false;
 	robot_poses = new Filter(ROBOT_FILTER_SIZE);
 	human_poses = new Filter(PERSON_FILTER_SIZE);
@@ -193,7 +197,12 @@ void Robot::myBlobUpdate (const geometry_msgs::TransformStamped& msg)
   
   float est_x = new_state.at<float>(X_T_IDX, 0);
   float est_y = new_state.at<float>(Y_T_IDX, 0);
+  float est_v = new_state.at<float>(VEL_IDX, 0);
   float est_theta = new_state.at<float>(THETA_IDX, 0);
+
+  // float est_x = human_global_pose.x;
+  // float est_y = human_global_pose.y;
+  // float est_theta = 0;
 
   if (!std::isnan(est_x) && !std::isnan(est_y))
   {
@@ -208,6 +217,7 @@ void Robot::myBlobUpdate (const geometry_msgs::TransformStamped& msg)
   else
   {
     ROS_ERROR("Kalman filter returned NaN position");
+    return;
   }
 
   if (!std::isnan(est_theta))
@@ -220,9 +230,42 @@ void Robot::myBlobUpdate (const geometry_msgs::TransformStamped& msg)
   {
     person_kalman_transform.setRotation(tf::Quaternion(0, 0, 0, 1));
     ROS_ERROR("Kalman filter returned NaN orientation");
+    return;
   }
 
   tf_broadcaster.sendTransform(person_kalman_transform);
+
+  // ------------------------ Predict position ------------------------ //
+  tf::StampedTransform prediction_kalman_transform;
+  prediction_kalman_transform.child_frame_id_ = "prediction_kalman"; // source
+  prediction_kalman_transform.frame_id_ = "map"; // target
+  prediction_kalman_transform.stamp_ = ros::Time::now();
+
+  float prediction_x = est_x + cos(est_theta) * PREDICTION_LOOKAHEAD_DISTANCE;
+  float prediction_y = est_y + sin(est_theta) * PREDICTION_LOOKAHEAD_DISTANCE;
+
+  prediction_kalman_transform.setOrigin(tf::Vector3(prediction_x, prediction_y, 0));
+  tf::Quaternion q;
+  q.setRPY(0, 0, est_theta);
+  prediction_kalman_transform.setRotation(q);
+
+  tf_broadcaster.sendTransform(prediction_kalman_transform);
+
+  // tell the robot to go to the predicted position
+  if (est_v > DISTANCE_EPSILON/10)
+  {
+    geometry_msgs::PoseStamped nav_goal_msg;
+    nav_goal_msg.header.stamp = ros::Time::now();
+    nav_goal_msg.header.frame_id = "map";
+    nav_goal_msg.pose.position.x = prediction_x;
+    nav_goal_msg.pose.position.y = prediction_y;
+    nav_goal_msg.pose.position.z = 0;
+    nav_goal_msg.pose.orientation.x = q.x();
+    nav_goal_msg.pose.orientation.y = q.y();
+    nav_goal_msg.pose.orientation.z = q.z();
+    nav_goal_msg.pose.orientation.w = q.w();
+    pub_nav_goal_.publish(nav_goal_msg);
+  }
 
   // // ROS_INFO("Robot Pose: %f, %f, %f", robot_pose.x, robot_pose.y, robot_pose.z);
   // cv::Point3f avg_dest = destination_pose->getFilter();

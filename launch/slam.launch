@@ -1,5 +1,6 @@
 <launch>
 	<param name="/use_sim_time" value="true"/>
+	<arg name="move_base_goal_frequency" value="1" />
 
 	<node pkg="stage_ros" type="stageros" name="stageros_node" args="$(find person_follower)/worlds/simple.world" />
 	
@@ -10,6 +11,8 @@
 		<remap from="/husky/cmd_vel" to="/robot_0/cmd_vel" />
 	</node>
 
+	<node name="nav_goal_throttler" type="throttle" pkg="topic_tools" args="messages /move_base_simple/goal_unthrottled 1 /move_base_simple/goal" />
+
 	<include file="$(find person_follower)/launch/ekf.launch" />
 	<!-- <node pkg="slam_karto" type="slam_karto" name="slam_karto" output="screen"> -->
 	<node pkg="gmapping" type="slam_gmapping" name="slam_gmapping" output="screen">
@@ -17,8 +20,9 @@
 		<param name="odom_frame" value="robot_0/odom_combined"/>
 		<param name="base_frame" value="robot_0/base_link"/>
 		<param name="map_frame" value="map"/>
-	    <param name="map_update_interval" value="1"/>
-	    <param name="resolution" value="100"/>
+	    <param name="map_update_interval" value="5	"/>
+	    <param name="resolution" value="1000"/>
+	    <param name="maxRange" value="7"/>
 	    <param name="xmin" value="-200"/>
 	    <param name="ymin" value="-200"/>
 	    <param name="xmax" value="200"/>
@@ -32,7 +36,7 @@
 	
 	<node pkg="joy" type="joy_node" name="joy_node" output="screen">
 		<remap from="/joy" to="/teleop/joy" />
-		<param name="dev" type="string" value="/dev/input/js1" />
+		<param name="dev" type="string" value="/dev/input/js0" />
 		<param name="autorepeat_rate" value="10" />
 	</node>
 

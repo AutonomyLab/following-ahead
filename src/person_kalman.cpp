@@ -77,9 +77,9 @@ void PersonKalman::update(const cv::Mat& y) {
   x_hat_new.at<float>(X_T_1_IDX, 0) = x_t;
   x_hat_new.at<float>(Y_T_1_IDX, 0) = y_t;
   // to prevent numerical issues at jacobian calculation, when the displacement is too small, just propagate last states
-  x_hat_new.at<float>(VEL_IDX, 0) = d > FLOAT_EPSILON ? d / dt * VEL_IIR_ALPHA + vel * (1 - VEL_IIR_ALPHA)
+  x_hat_new.at<float>(VEL_IDX, 0) = d > DISTANCE_EPSILON ? d / dt * VEL_IIR_ALPHA + vel * (1 - VEL_IIR_ALPHA)
                                                       : vel;
-  x_hat_new.at<float>(THETA_IDX, 0) = d > FLOAT_EPSILON ? atan2(del_y, del_x) * THETA_IIR_ALPHA + theta * (1 - THETA_IIR_ALPHA)
+  x_hat_new.at<float>(THETA_IDX, 0) = d > DISTANCE_EPSILON ? atan2(del_y, del_x) * THETA_IIR_ALPHA + theta * (1 - THETA_IIR_ALPHA)
                                                         : theta;
 
   std::cout << "A: \n" << A << std::endl;
@@ -128,7 +128,7 @@ void PersonKalman::update(const cv::Mat& y, double dt) {
   A.at<float>(Y_T_IDX, VEL_IDX) = sinTheta * dt;
   A.at<float>(Y_T_IDX, THETA_IDX) = vel * cosTheta * dt;
 
-  if ( fabs(d) > FLOAT_EPSILON )
+  if ( fabs(d) > DISTANCE_EPSILON )
   {
     A.at<float>(VEL_IDX, X_T_IDX) = VEL_IIR_ALPHA * del_x / d / dt;
     A.at<float>(VEL_IDX, Y_T_IDX) = VEL_IIR_ALPHA * del_y / d / dt;
@@ -143,7 +143,7 @@ void PersonKalman::update(const cv::Mat& y, double dt) {
     A.at<float>(VEL_IDX, VEL_IDX) = 1;
   }
 
-  if ( fabs(d_2) > FLOAT_EPSILON ) 
+  if ( fabs(d_2) > DISTANCE_EPSILON ) 
   {
     A.at<float>(THETA_IDX, X_T_IDX) = - THETA_IIR_ALPHA * del_y / d_2;
     A.at<float>(THETA_IDX, Y_T_IDX) = THETA_IIR_ALPHA * del_x / d_2;

@@ -3,7 +3,7 @@
 
 #include <cmath>
 
-#define FLOAT_EPSILON 0.01
+#define DISTANCE_EPSILON 0.01
 
 #define PERSON_FILTER_SIZE 1
 #define ROBOT_FILTER_SIZE 1
@@ -49,8 +49,8 @@
 #define THETA_IDX 5
 // Infinite impulse response (IIR) filter for velocity and orientation
 // higher these values, more importance to the new readings
-#define VEL_IIR_ALPHA 0.5
-#define THETA_IIR_ALPHA 0.5
+#define VEL_IIR_ALPHA 0.3
+#define THETA_IIR_ALPHA 0.3
 
 // process noise during the prediction step of EKF
 #define X_T_PROCESS_NOISE_VAR 0.01
@@ -62,8 +62,8 @@
 
 // measurement noise during the correction step of EKF
 // TODO: they are in meters, change them to be in pixels
-#define X_T_MEASUREMENT_NOISE_VAR 0.001
-#define Y_T_MEASUREMENT_NOISE_VAR 0.001
+#define X_T_MEASUREMENT_NOISE_VAR 0.1
+#define Y_T_MEASUREMENT_NOISE_VAR 0.1
 
 // initial error state covariance
 #define X_T_INIT_ERROR_VAR 0.01
@@ -72,6 +72,9 @@
 #define Y_T_1_INIT_ERROR_VAR 0.01
 #define VEL_INIT_ERROR_VAR 0.01
 #define THETA_INIT_ERROR_VAR 0.01
+
+// lookahead distance (m) for prediction
+#define PREDICTION_LOOKAHEAD_DISTANCE 2.0
 
 #define FOV 180.0
 
