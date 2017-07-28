@@ -57,7 +57,7 @@ public:
   * Update the estimated state based on measured values,
   * using the given time step and dynamics matrix.
   */
-  void update(const cv::Mat& y, double dt);
+  void update(const cv::Mat& y, double dt, cv::Mat R=cv::Mat());
 
   /**
   * Return the current state and time.
@@ -69,6 +69,8 @@ public:
    * Is the filter initialized?
    */
   bool isInitialized() { return initialized; }
+
+  cv::Mat getStateErrorCovariance() { return P; }
 
 private:
 

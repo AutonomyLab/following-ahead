@@ -70,8 +70,6 @@ public:
 	{
 
 		// ROS_INFO("Callback from %d, count: %d", isFront, blobMsg->detections.size());
-		double speedX = 0;
-		double speedY = 0;
 		// no blob
 		// if (counter%10 !=0)
 		//   return 0;
@@ -84,7 +82,7 @@ public:
 
 	
 	    double centerPointX = (blobMsg->detections[0].left + blobMsg->detections[0].right) / 2.0;
-		double centerPointY = (blobMsg->detections[0].top + blobMsg->detections[0].bottom) / 2.0;
+		// double centerPointY = (blobMsg->detections[0].top + blobMsg->detections[0].bottom) / 2.0;
 
 		double degree = getBlobBearing(centerPointX, maxblobx);
 		ROS_INFO("BEARING: %f", degree * 180.0 / M_PI);
@@ -124,12 +122,16 @@ public:
 		relative_est.at<float>(0, 0) = relative_x_est;
 		relative_est.at<float>(1, 0) = relative_y_est;
 		relative_est.at<float>(2, 0) = 1;
+		
 		geometry_msgs::TransformStamped msg;
+		msg.header.stamp = blobMsg->header.stamp;
+
 		msg.transform.translation.x = relative_x_est;
 		msg.transform.translation.y = relative_y_est;
-		msg.transform.translation.z = 0;
-
-		msg.transform.rotation.x = 0;
+		// the z is range
+		msg.transform.translation.z = range;
+		// the quaternion x is the bearing angle
+		msg.transform.rotation.x = degree;
 		msg.transform.rotation.y = 0;
 		msg.transform.rotation.z = 0;
 		msg.transform.rotation.w = 1;

@@ -143,6 +143,7 @@ add_library(${PROJECT_NAME}
   src/kalman.cpp
   src/utils.cpp
   src/ParticleFilter.cpp
+  src/PredictionParticleFilter.cpp
   src/person_kalman.cpp
 )
 

@@ -19,7 +19,10 @@
 
 #include <sstream>
 
-#include <limits> include <vector> include <iostream> include <cassert>
+#include <limits> 
+#include <vector> 
+#include <iostream> 
+#include <cassert>
 #include <algorithm>
 #include <cmath>
 #include <opencv2/core.hpp>

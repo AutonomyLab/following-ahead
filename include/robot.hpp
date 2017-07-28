@@ -13,9 +13,10 @@
 #include <geometry_msgs/Twist.h>
 #include <geometry_msgs/TransformStamped.h>
 #include <nav_msgs/Odometry.h>
-#include <nav_msgs/GridCells.h>
+#include <sensor_msgs/PointCloud.h>
 #include "person_kalman.hpp"
 #include "ParticleFilter.hpp"
+#include "PredictionParticleFilter.hpp"
 
 class Robot
 {
@@ -40,6 +41,7 @@ private:
 	bool isDeadManActive;
 
 	ParticleFilter particle_filter_;
+	PredictionParticleFilter prediction_particle_filter_;
 	PersonKalman *person_kalman_;
 	
 	tf::TransformListener tf_listener;
@@ -47,6 +49,8 @@ private:
 	tf::StampedTransform local_transform;
 
 	ros::Publisher pub_nav_goal_;
+
+	nav_msgs::Odometry current_odometry_;
 	
 public:
 	Robot(ros::NodeHandle n);

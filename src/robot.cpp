@@ -51,7 +51,7 @@ Robot::Robot(ros::NodeHandle n)
   person_kalman_ = new PersonKalman(0.1, Q, R, P);
 
   cmd_vel_publisher =  n.advertise<geometry_msgs::Twist>("/husky/cmd_vel", 1);
-  pub_particles_ = n.advertise<nav_msgs::GridCells>("person_follower/person_particle", 1);
+  pub_particles_ = n.advertise<sensor_msgs::PointCloud>("person_follower/person_particle", 1);
   pub_nav_goal_ = n.advertise<geometry_msgs::PoseStamped>("move_base_simple/goal_unthrottled", 1);
 
   isDeadManActive = false;
@@ -77,7 +77,7 @@ void Robot::joyCallback(const sensor_msgs::Joy& msg)
   }
   else 
     isDeadManActive = false;
-  std::cout << "isDeadManActive: " << isDeadManActive << std::endl; 
+  // std::cout << "isDeadManActive: " << isDeadManActive << std::endl; 
 }
 
 void Robot::myBlobUpdate (const geometry_msgs::TransformStamped& msg)
@@ -111,6 +111,7 @@ void Robot::myBlobUpdate (const geometry_msgs::TransformStamped& msg)
   transform_r0_r1.setRotation(r0_T_map.getRotation());
   tf_broadcaster.sendTransform(tf::StampedTransform(transform_r0_r1, ros::Time::now(), "robot_0/base_footprint", "robot_1/base_footprint"));
 
+  ROS_INFO("Blob-tf time diff: %f", r0_T_map.stamp_.toSec() - msg.header.stamp.toSec());
   ROS_INFO("Broadcasting robot_0, robot_1 tf");
 
   if (!particle_filter_.isInitialized())
@@ -126,38 +127,6 @@ void Robot::myBlobUpdate (const geometry_msgs::TransformStamped& msg)
     // update the damn particles here based on measurement
     particle_filter_.update(human_relative_pose, r0_T_map);
   }
-
-  // lets publish particles
-  nav_msgs::GridCells particles;
-  particles.header.stamp = ros::Time::now();
-  particles.header.frame_id = "map";
-  particles.cell_width = 0.1  ;
-  particles.cell_height = 0.1;
-  
-  ROS_INFO("Num particles: %d", particle_filter_.getNumParticles());
-  for (size_t i = 0, len = particle_filter_.getNumParticles(); i < len; i++)
-  {
-    ParticleFilter::Particle particle = particle_filter_.getParticleAt(i);
-    cv::Point3f particle_state = particle.getState();
-
-    geometry_msgs::Point point;
-    point.x = particle_state.x;
-    point.y = particle_state.y;
-    point.z = 0;
-    particles.cells.push_back(point);
-
-    if (fabs(point.x) < 0.001 && fabs(point.y) < 0.001)
-    {
-      ROS_ERROR("Particle %d at origin", i);
-    }
-  }
-  
-  pub_particles_.publish(particles);
-
-  
-  
-
-
 
 
 
@@ -185,7 +154,65 @@ void Robot::myBlobUpdate (const geometry_msgs::TransformStamped& msg)
     person_kalman_->init(0, initState);
   }
   
-  person_kalman_->update(y, 0.1);
+  // THIS IS NOT RIGHT, THE MEASUREMENTS ARE ABSOLUTE POSE, NOT RELATIVE
+  // the z in the relative pose is actually the depth (range). Lol!!!
+  // float human_distance = human_relative_pose.z;
+  // float human_distance_2 = human_distance * human_distance;
+  // // the quaternion x is the bearing angle
+  float bearing_angle = msg.transform.rotation.x;
+  float bearing_range = msg.transform.translation.z;
+
+  tf::Transform map_T_r0 = r0_T_map.inverse();
+  float robot_orientation = tf::getYaw(map_T_r0.getRotation());
+  float robot_x = map_T_r0.getOrigin().getX();
+  float robot_y = map_T_r0.getOrigin().getY();
+
+  float cos_bearing = cos(bearing_angle);
+  float sin_bearing = sin(bearing_angle);
+  float cos_robot_orientation = cos(robot_orientation);
+  float sin_robot_orientation = sin(robot_orientation);
+
+  // variances
+  float robot_orientation_variance = fabs(ROBOT_ORIENTATION_VARIANCE_SCALING * current_odometry_.twist.twist.angular.z);
+  float robot_x_variance = fabs(ROBOT_VELOCITY_VARIANCE_SCALING * cos_robot_orientation * current_odometry_.twist.twist.linear.x);
+  float robot_y_variance = fabs(ROBOT_VELOCITY_VARIANCE_SCALING * sin_robot_orientation * current_odometry_.twist.twist.linear.x);
+
+  ROS_INFO("Odom: %f, %f", current_odometry_.twist.twist.linear.x, current_odometry_.twist.twist.angular.z);
+
+  cv::Mat J_range = cv::Mat::zeros(2, 1, CV_32F);
+  cv::Mat J_bearing = cv::Mat::zeros(2, 1, CV_32F);
+  cv::Mat J_robot_orientation = cv::Mat::zeros(2, 1, CV_32F);
+  cv::Mat J_robot_x = cv::Mat::zeros(2, 1, CV_32F);
+  cv::Mat J_robot_y = cv::Mat::zeros(2, 1, CV_32F);
+  
+  J_range.at<float>(0, 0) = -cos_bearing * cos_robot_orientation - sin_bearing * sin_robot_orientation;
+  J_range.at<float>(1, 0) = -cos_bearing * sin_robot_orientation + sin_bearing * cos_robot_orientation;
+
+  J_bearing.at<float>(0, 0) = bearing_range * sin_bearing * cos_robot_orientation - bearing_range * cos_bearing * sin_robot_orientation;
+  J_bearing.at<float>(1, 0) = bearing_range * sin_bearing * sin_robot_orientation + bearing_range * cos_bearing * cos_robot_orientation;
+
+  J_robot_orientation.at<float>(0, 0) = bearing_range * cos_bearing * sin_robot_orientation - bearing_range * sin_bearing * cos_robot_orientation;
+  J_robot_orientation.at<float>(1, 0) = -bearing_range * cos_bearing * cos_robot_orientation - bearing_range * sin_bearing * sin_robot_orientation;
+
+  J_robot_x.at<float>(0, 0) = 1;
+  J_robot_x.at<float>(1, 0) = 0;
+
+  J_robot_y.at<float>(0, 0) = 0;
+  J_robot_y.at<float>(1, 0) = 1;
+
+  cv::Mat R = cv::Mat::zeros(2, 2, CV_32F);
+  R = J_range * J_range.t() * BEARING_RANGE_ERROR_VAR +
+      J_bearing * J_bearing.t() * BEARING_ANGLE_ERROR_VAR +
+      J_robot_orientation * J_robot_orientation.t() * robot_orientation_variance +
+      J_robot_x * J_robot_x.t() * robot_x_variance +
+      J_robot_y * J_robot_y.t() * robot_y_variance;
+
+  R.at<float>(0, 0) += 0.01;
+  R.at<float>(1, 1) += 0.01;
+
+  std::cout << "R: \n" << R << std::endl; 
+
+  person_kalman_->update(y, LOOP_TIME, R);
   cv::Mat new_state = person_kalman_->state();
 
   // TODO: MAKE THE TFs ROS PARAM!!!
@@ -203,6 +230,8 @@ void Robot::myBlobUpdate (const geometry_msgs::TransformStamped& msg)
   // float est_x = human_global_pose.x;
   // float est_y = human_global_pose.y;
   // float est_theta = 0;
+
+
 
   if (!std::isnan(est_x) && !std::isnan(est_y))
   {
@@ -250,10 +279,75 @@ void Robot::myBlobUpdate (const geometry_msgs::TransformStamped& msg)
   prediction_kalman_transform.setRotation(q);
 
   tf_broadcaster.sendTransform(prediction_kalman_transform);
-
+  cv::Mat person_error_covariance = person_kalman_->getStateErrorCovariance();
+  float velocity_stddev = sqrt(person_error_covariance.at<float>(VEL_IDX, VEL_IDX));
+  float theta_stddev = sqrt(person_error_covariance.at<float>(THETA_IDX, THETA_IDX));
+  float target_x_stddev = sqrt(person_error_covariance.at<float>(X_T_IDX, X_T_IDX));
+  float target_y_stddev = sqrt(person_error_covariance.at<float>(Y_T_IDX, Y_T_IDX));
   // tell the robot to go to the predicted position
-  if (est_v > DISTANCE_EPSILON/10)
+  if (
+    est_v > DISTANCE_EPSILON/10 &&
+    // velocity_stddev < VELOCITY_ERROR_EPSILON &&
+    theta_stddev < ORIENTATION_ERROR_EPSILON
+    // target_x_stddev < POSITION_ERROR_EPSILON &&
+    // target_y_stddev < POSITION_ERROR_EPSILON
+  )
   {
+    cv::Point3f target_position(est_x, est_y, 0);
+    cv::Point3f target_position_stddev(
+      target_x_stddev, target_y_stddev, 0
+    );
+
+    if (!prediction_particle_filter_.isInitialized())
+    {
+      prediction_particle_filter_. init(
+        NUM_PARTICLES, 
+        target_position,
+        est_v, velocity_stddev,
+        est_theta, theta_stddev
+      );
+    }
+    else
+    {
+      prediction_particle_filter_.update(
+        target_position, target_position_stddev, 
+        est_v, velocity_stddev,
+        est_theta, theta_stddev,
+        LOOP_TIME
+      );
+    }
+
+    // lets publish particles
+    sensor_msgs::PointCloud particles;
+    particles.header.stamp = ros::Time::now();
+    particles.header.frame_id = "map";
+    
+    ROS_INFO("Num particles: %d", prediction_particle_filter_.getNumPredictionParticles());
+    for (size_t i = 0, len = prediction_particle_filter_.getNumPredictionParticles(); i < len; i++)
+    {
+      PredictionParticleFilter::PredictionParticle particle = prediction_particle_filter_.getPredictionParticleAt(i);
+      cv::Point3f particle_state = particle.getState();
+
+      geometry_msgs::Point32 point;
+      point.x = particle_state.x;
+      point.y = particle_state.y;
+      point.z = particle.getWeight();
+      particles.points.push_back(point);
+
+      sensor_msgs::ChannelFloat32 color;
+      color.name = "rgb";
+      color.values.push_back((float)rand()/RAND_MAX*255);
+      color.values.push_back(0.0);
+      color.values.push_back(0.0);
+
+      if (fabs(point.x) < 0.001 && fabs(point.y) < 0.001)
+      {
+         ROS_INFO("Particle %d at origin weight:%f ", i, point.z);
+      }
+    }
+  
+    pub_particles_.publish(particles);
+
     geometry_msgs::PoseStamped nav_goal_msg;
     nav_goal_msg.header.stamp = ros::Time::now();
     nav_goal_msg.header.frame_id = "map";
@@ -265,6 +359,13 @@ void Robot::myBlobUpdate (const geometry_msgs::TransformStamped& msg)
     nav_goal_msg.pose.orientation.z = q.z();
     nav_goal_msg.pose.orientation.w = q.w();
     pub_nav_goal_.publish(nav_goal_msg);
+  }
+  else
+  {
+    ROS_WARN(
+      "High error: %f, %f, %f, %f", 
+      velocity_stddev, theta_stddev, target_x_stddev, target_y_stddev
+    );
   }
 
   // // ROS_INFO("Robot Pose: %f, %f, %f", robot_pose.x, robot_pose.y, robot_pose.z);
@@ -382,6 +483,7 @@ int Robot::publishCmdVel(cv::Point3f destination)
 
 void Robot::odometryCallback(const nav_msgs::Odometry& msg)
 {
+  current_odometry_ = msg;
   // cv::Point3f robot_pose;
   // cv::Mat state = kalman_filter->state();
     

@@ -13,7 +13,7 @@
 
 
 /**
- * Our state(x): x, y, theta, x_dot, y_dot
+ * Our state(x): x, y, vel, theta, x[t-1], y[t-1]
  * Our measurement (y): odom (v, omega)
  */
 PersonKalman::PersonKalman(
@@ -79,8 +79,25 @@ void PersonKalman::update(const cv::Mat& y) {
   // to prevent numerical issues at jacobian calculation, when the displacement is too small, just propagate last states
   x_hat_new.at<float>(VEL_IDX, 0) = d > DISTANCE_EPSILON ? d / dt * VEL_IIR_ALPHA + vel * (1 - VEL_IIR_ALPHA)
                                                       : vel;
-  x_hat_new.at<float>(THETA_IDX, 0) = d > DISTANCE_EPSILON ? atan2(del_y, del_x) * THETA_IIR_ALPHA + theta * (1 - THETA_IIR_ALPHA)
-                                                        : theta;
+  
+  if (d > DISTANCE_EPSILON)
+  {
+    // this doesn't work when the angle is around 180 (some will be say 179 and some -179 and they'll cancel to 0)
+    // x_hat_new.at<float>(THETA_IDX, 0) =  atan2(del_y, del_x) * THETA_IIR_ALPHA + theta * (1 - THETA_IIR_ALPHA);
+    float new_theta = atan2(del_y, del_x);
+    // calculate unit vectors at the two orientations
+    cv::Point2f unit_vector1(cos(new_theta), sin(new_theta));
+    cv::Point2f unit_vector2(cos(theta), sin(theta));
+    cv::Point2f sum_vector = unit_vector1 * THETA_IIR_ALPHA + unit_vector2 * (1 - THETA_IIR_ALPHA);
+
+    x_hat_new.at<float>(THETA_IDX, 0) = atan2(sum_vector.y, sum_vector.x);
+
+    ROS_WARN("new theta:%f old theta:%f average:%f",new_theta, theta, x_hat_new.at<float>(THETA_IDX, 0));
+  }
+  else
+  {
+    x_hat_new.at<float>(THETA_IDX, 0) = theta; 
+  }
 
   std::cout << "A: \n" << A << std::endl;
   std::cout << "Measurement: " << y.t() << std::endl;
@@ -99,7 +116,15 @@ void PersonKalman::update(const cv::Mat& y) {
   t += dt;
 }
 
-void PersonKalman::update(const cv::Mat& y, double dt) {
+void PersonKalman::update(const cv::Mat& y, double dt, cv::Mat R) {
+  if (R.rows == m && R.cols == m) 
+  {
+    this->R = R;
+  }
+  else
+  {
+    ROS_ERROR("r is not m by m");
+  }
 
   float cosTheta = cos(x_hat.at<float>(THETA_IDX, 0)); 
   float sinTheta = sin(x_hat.at<float>(THETA_IDX, 0));

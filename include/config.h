@@ -4,6 +4,9 @@
 #include <cmath>
 
 #define DISTANCE_EPSILON 0.01
+#define VELOCITY_ERROR_EPSILON 1.0
+#define POSITION_ERROR_EPSILON 1.0
+#define ORIENTATION_ERROR_EPSILON 2.5
 
 #define PERSON_FILTER_SIZE 1
 #define ROBOT_FILTER_SIZE 1
@@ -58,7 +61,7 @@
 #define X_T_1_PROCESS_NOISE_VAR 0.01
 #define Y_T_1_PROCESS_NOISE_VAR 0.01
 #define VEL_PROCESS_NOISE_VAR 0.01
-#define THETA_PROCESS_NOISE_VAR 0.01
+#define THETA_PROCESS_NOISE_VAR 0.1
 
 // measurement noise during the correction step of EKF
 // TODO: they are in meters, change them to be in pixels
@@ -70,11 +73,27 @@
 #define Y_T_INIT_ERROR_VAR 0.01
 #define X_T_1_INIT_ERROR_VAR 0.01
 #define Y_T_1_INIT_ERROR_VAR 0.01
-#define VEL_INIT_ERROR_VAR 0.01
-#define THETA_INIT_ERROR_VAR 0.01
+#define VEL_INIT_ERROR_VAR 0.1
+#define THETA_INIT_ERROR_VAR 0.1
+
+// in rad^2
+#define BEARING_ANGLE_ERROR_VAR 0.45	
+#define BEARING_RANGE_ERROR_VAR 0.012
+
+
+#define ROBOT_ORIENTATION_VARIANCE_SCALING 5.0
+#define ROBOT_VELOCITY_VARIANCE_SCALING 0.5
 
 // lookahead distance (m) for prediction
-#define PREDICTION_LOOKAHEAD_DISTANCE 2.0
+#define PREDICTION_LOOKAHEAD_DISTANCE 4.0
+
+// maximum orientation change between two iterations (used for calculating probability of the measurement)
+#define MAX_DEL_THETA 0.17453292519943295 // 10 degrees
+#define MEASUREMENT_PROBABILITY_EPSILON 0.0001
+
+#define TRANSPORT_PARTICLE_PROBABILITY_EPSILON 0.0001
+
+#define STDDEV_EPSILON 0.0001
 
 #define FOV 180.0
 
