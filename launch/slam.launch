@@ -3,6 +3,7 @@
 	<!-- <arg name="odom_frame" default="robot_0/odom_combined" /> -->
 	<arg name="odom_frame" default="robot_0/odom" />
 	<arg name="map_frame" default="map" />
+	<arg name="use_deadman" default="false" />
 	<arg name="person_frame" default="robot_1/base_footprint" />
 
 	<param name="/use_sim_time" value="true"/>
@@ -19,6 +20,7 @@
 		<param name="odom_frame" value="$(arg odom_frame)" />
 		<param name="map_frame" value="$(arg map_frame)" />
 		<param name="person_frame" value="$(arg person_frame)" />
+		<param name="use_deadman" value="$(arg use_deadman)" type="bool"/>
 
 		<remap from="/husky/odom" to="/robot_0/odom" />
 		<remap from="/husky/cmd_vel" to="/robot_0/cmd_vel" />
@@ -46,7 +48,7 @@
 
 	<include file="$(find person_follower)/config_nav/move_base.xml" />
 
-	<node pkg="rviz" type="rviz" name="rviz" output="screen" />
+	<node pkg="rviz" type="rviz" name="rviz" output="screen" args="-d $(find person_follower)/config/simulation.rviz"/>
 	
 	<node pkg="joy" type="joy_node" name="joy_node" output="screen">
 		<remap from="/joy" to="/teleop/joy" />

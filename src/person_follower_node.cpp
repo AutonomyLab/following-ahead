@@ -1,5 +1,5 @@
 #include "ros/ros.h"
-#include "yolo2/ImageDetections.h"
+// #include "yolo2/ImageDetections.h"
 #include <std_msgs/Bool.h>
 #include <std_msgs/String.h>
 #include <sensor_msgs/Image.h>
@@ -196,6 +196,13 @@ int main(int argc, char** argv )
   std::string odom_frame;
   std::string map_frame;
   std::string person_frame;
+  bool use_deadman;
+
+  if (!n.getParam("use_deadman", use_deadman))
+  {
+    ROS_WARN("no param for use_deadman, using default(true)");
+    use_deadman = true;
+  }
 
   if (!n.getParam("base_frame", base_frame))
   {
@@ -223,7 +230,7 @@ int main(int argc, char** argv )
 
   
   Robot myRobot(
-    n, base_frame, odom_frame, map_frame, person_frame
+    n, base_frame, odom_frame, map_frame, person_frame, use_deadman
   );
 
   // message_filters::Subscriber<yolo2::ImageDetections> detectionSub(n, "vision/yolo2/detections", 1);
