@@ -1,0 +1,76 @@
+<launch>
+	<arg name="base_frame" default="base_link" />
+	<arg name="odom_frame" default="odom" />
+	<arg name="map_frame" default="map" />
+	<arg name="person_frame" default="person_raw" />
+
+
+	<param name="/use_sim_time" value="false"/>
+	<arg name="move_base_goal_frequency" default="0.5" />
+
+	<!-- Dummy tf for test -->
+	<!-- <node pkg="tf" type="static_transform_publisher" name="static_transform_publisher0" args="0 0 0 0 0 0 map base_link 50"/>
+	<node pkg="tf" type="static_transform_publisher" name="static_transform_publisher1" args="0 0 0 0 0 0 base_link laser 50"/> -->
+
+	<node pkg="tf" type="static_transform_publisher" name="static_transform_publisher" args="0 0 0.220 0 0 0 base_link laser 50"/>
+
+	<include file="$(find vicon_bridge)/launch/vicon.launch" />
+
+	<node pkg="person_follower" type="relative_kinect_publisher.py" name="relative_kinect_publisher" /> 
+	
+	<node pkg="person_follower" type="person_follower_node" name="person_follower_node" output="screen">
+		<param name="base_frame" value="$(arg base_frame)" />
+		<param name="odom_frame" value="$(arg odom_frame)" />
+		<param name="map_frame" value="$(arg map_frame)" />
+		<param name="person_frame" value="$(arg person_frame)" />
+
+		<remap from="/husky/odom" to="/odom" />
+		<remap from="/husky/cmd_vel" to="/cmd_vel" />
+	</node>
+
+	
+	<node name="nav_goal_throttler" type="throttle" pkg="topic_tools" args="messages /move_base_simple/goal_unthrottled $(arg move_base_goal_frequency) /move_base_simple/goal" />
+
+	<!-- <node pkg="robot_pose_ekf" type="robot_pose_ekf" name="robot_pose_ekf">
+	    <param name="output_frame" value="/odom_combined"/>
+	    <param name="base_footprint_frame" value="/base_link" />
+	    <param name="freq" value="10.0"/>
+	    <param name="sensor_timeout" value="1.0"/>
+	    <param name="odom_used" value="true"/>
+	    <param name="imu_used" value="false"/>
+	    <param name="vo_used" value="false"/>
+	    <param name="debug" value="false"/>
+	    <param name="self_diagnose" value="false"/>
+	</node> -->
+
+	<!-- <node pkg="slam_karto" type="slam_karto" name="slam_karto" output="screen"> -->
+	<node pkg="gmapping" type="slam_gmapping" name="slam_gmapping" output="screen">
+		<param name="odom_frame" value="odom"/>
+		<!-- <param name="odom_frame" value="odom_combined"/> -->
+		<param name="base_frame" value="$(arg base_frame)"/>
+		<param name="map_frame" value="$(arg map_frame)"/>
+	    <param name="map_update_interval" value="1"/>
+	    <param name="resolution" value="1000"/>
+	    <param name="maxRange" value="7"/>
+	    <param name="xmin" value="-200"/>
+	    <param name="ymin" value="-200"/>
+	    <param name="xmax" value="200"/>
+	    <param name="ymax" value="200"/>
+	    <rosparam command="load" file="$(find person_follower)/config_nav_pioneer/mapper_params.yaml" />
+	</node>
+
+	<include file="$(find person_follower)/config_nav_pioneer/move_base.xml" />
+
+	<node pkg="rviz" type="rviz" name="rviz" output="screen" args="-d $(find person_follower)/config/pioneer.rviz"/>
+	
+	<node pkg="joy" type="joy_node" name="joy_node" output="screen">
+		<remap from="/joy" to="/teleop/joy" />
+		<param name="dev" type="string" value="/dev/input/js0" />
+		<!-- <param name="dev" type="string" value="/dev/input/js2" /> -->
+		<param name="autorepeat_rate" value="10" />
+	</node>
+
+	<!-- <node pkg="teleop_twist_joy" type="teleop_node" name="teleop_node">
+		<remap from="joy" to="teleop/joy" />
+	</node> -->
+</launch>

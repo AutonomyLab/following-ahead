@@ -8,7 +8,8 @@ ParticleFilter::Particle::Particle(cv::Point3f state, float weight)
 	setWeight(weight);
 }
 
-ParticleFilter::ParticleFilter() : is_initialized_(false)
+ParticleFilter::ParticleFilter() 
+	: is_initialized_(false)
 {
 
 }
@@ -120,13 +121,17 @@ void ParticleFilter::resampleParticle()
 void ParticleFilter::init(	size_t num_particles, 
 							float measurement_noise_stddev_x, float measurement_noise_stddev_y,
 							float particle_stochastic_velocity_stddev,
-							cv::Point3f initial_relative_estimate, tf::StampedTransform r0_T_map	)
+							cv::Point3f initial_relative_estimate, tf::StampedTransform r0_T_map,
+							std::string base_frame, std::string map_frame	)
 {
+	base_frame_ = base_frame;
+	map_frame_ = map_frame;
+	
 	num_particles_ = num_particles;
 	particles_.clear();
 	particles_.reserve(num_particles_);
 
-	tf::StampedTransform map_T_r0 = tf::StampedTransform(r0_T_map.inverse(), r0_T_map.stamp_, "map", "robot_0/base_footprint");
+	tf::StampedTransform map_T_r0 = tf::StampedTransform(r0_T_map.inverse(), r0_T_map.stamp_, map_frame_, base_frame_);
 	// TODO: propagate error in robot position to error in global estimate
 	prev_global_estimate_ = transformPoint(map_T_r0, initial_relative_estimate);
 

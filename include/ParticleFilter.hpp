@@ -32,7 +32,8 @@ public:
 	void init(	size_t num_particles, 
 				float measurement_noise_stddev_x, float measurement_noise_stddev_y,
 				float particle_stochastic_velocity_stddev,
-				cv::Point3f initialEstimate, tf::StampedTransform r0_T_map );
+				cv::Point3f initialEstimate, tf::StampedTransform r0_T_map,
+				std::string base_frame, std::string map_frame );
 
 	bool isInitialized() { return is_initialized_; }
 	size_t getNumParticles() { return num_particles_; }
@@ -59,4 +60,7 @@ private:
 	std::normal_distribution<float> *measurement_noise_distribution_y_;
 
 	std::normal_distribution<float> *stochastic_velocity_distribution_;
+
+	std::string base_frame_;
+	std::string map_frame_;
 };

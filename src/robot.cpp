@@ -24,8 +24,13 @@ cv::Point3f Robot::getHumanPose()
 	return human_poses->getFilter();
 }
 
-Robot::Robot(ros::NodeHandle n)
+Robot::Robot( ros::NodeHandle n,
+              std::string base_frame, std::string odom_frame, 
+              std::string map_frame, std::string person_frame  )
+  : base_frame_(base_frame), odom_frame_(odom_frame), 
+    map_frame_(map_frame), person_frame_(person_frame)
 {
+
   cv::Mat Q = cv::Mat::zeros(NUM_STATES, NUM_STATES, CV_32F);
   Q.at<float>(X_T_IDX, X_T_IDX) = X_T_PROCESS_NOISE_VAR;
   Q.at<float>(Y_T_IDX, Y_T_IDX) = Y_T_PROCESS_NOISE_VAR;
@@ -51,8 +56,8 @@ Robot::Robot(ros::NodeHandle n)
   person_kalman_ = new PersonKalman(0.1, Q, R, P);
 
   cmd_vel_publisher =  n.advertise<geometry_msgs::Twist>("/husky/cmd_vel", 1);
-  pub_particles_ = n.advertise<sensor_msgs::PointCloud>("person_follower/person_particle", 1);
-  pub_nav_goal_ = n.advertise<geometry_msgs::PoseStamped>("move_base_simple/goal_unthrottled", 1);
+  pub_particles_ = n.advertise<sensor_msgs::PointCloud>("person_particle", 1);
+  pub_nav_goal_ = n.advertise<geometry_msgs::PoseStamped>("/move_base_simple/goal_unthrottled", 1);
 
   isDeadManActive = false;
 	robot_poses = new Filter(ROBOT_FILTER_SIZE);
@@ -72,7 +77,7 @@ Robot::Robot(ros::NodeHandle n)
 
 void Robot::joyCallback(const sensor_msgs::Joy& msg)
 {
-  if (msg.buttons[0]==1 && msg.buttons[6]==1 && msg.buttons[7]==1 ) {
+  if (msg.buttons[0]==1) { // && msg.buttons[6]==1 && msg.buttons[7]==1 ) {
     isDeadManActive = true;
   }
   else 
@@ -96,7 +101,7 @@ void Robot::myBlobUpdate (const geometry_msgs::TransformStamped& msg)
   try
   {
     
-    tf_listener.lookupTransform("robot_0/base_footprint", "map",
+    tf_listener.lookupTransform(base_frame_, map_frame_,
                                 ros::Time(0), r0_T_map);
   }
   catch (tf::TransformException ex)
@@ -109,7 +114,7 @@ void Robot::myBlobUpdate (const geometry_msgs::TransformStamped& msg)
   tf::Transform transform_r0_r1;
   transform_r0_r1.setOrigin( tf::Vector3(msg.transform.translation.x, msg.transform.translation.y, 0.0) );
   transform_r0_r1.setRotation(r0_T_map.getRotation());
-  tf_broadcaster.sendTransform(tf::StampedTransform(transform_r0_r1, ros::Time::now(), "robot_0/base_footprint", "robot_1/base_footprint"));
+  tf_broadcaster.sendTransform(tf::StampedTransform(transform_r0_r1, ros::Time::now(), base_frame_, person_frame_));
 
   ROS_INFO("Blob-tf time diff: %f", r0_T_map.stamp_.toSec() - msg.header.stamp.toSec());
   ROS_INFO("Broadcasting robot_0, robot_1 tf");
@@ -118,7 +123,8 @@ void Robot::myBlobUpdate (const geometry_msgs::TransformStamped& msg)
   {
     particle_filter_.init(
       NUM_PARTICLES, BLOB_NOISE_STDDEV_X, BLOB_NOISE_STDDEV_Y, PARTICLE_STOCHASTIC_VELOCITY_STDDEV,
-      human_relative_pose, r0_T_map 
+      human_relative_pose, r0_T_map,
+      base_frame_, map_frame_ 
     );
     ROS_INFO("particle_filter_ initialized!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
   }
@@ -267,7 +273,7 @@ void Robot::myBlobUpdate (const geometry_msgs::TransformStamped& msg)
   // ------------------------ Predict position ------------------------ //
   tf::StampedTransform prediction_kalman_transform;
   prediction_kalman_transform.child_frame_id_ = "prediction_kalman"; // source
-  prediction_kalman_transform.frame_id_ = "map"; // target
+  prediction_kalman_transform.frame_id_ = map_frame_; // target
   prediction_kalman_transform.stamp_ = ros::Time::now();
 
   float prediction_x = est_x + cos(est_theta) * PREDICTION_LOOKAHEAD_DISTANCE;
@@ -286,9 +292,9 @@ void Robot::myBlobUpdate (const geometry_msgs::TransformStamped& msg)
   float target_y_stddev = sqrt(person_error_covariance.at<float>(Y_T_IDX, Y_T_IDX));
   // tell the robot to go to the predicted position
   if (
-    est_v > DISTANCE_EPSILON/10 &&
+    true // est_v > DISTANCE_EPSILON/10
+    // theta_stddev < ORIENTATION_ERROR_EPSILON
     // velocity_stddev < VELOCITY_ERROR_EPSILON &&
-    theta_stddev < ORIENTATION_ERROR_EPSILON
     // target_x_stddev < POSITION_ERROR_EPSILON &&
     // target_y_stddev < POSITION_ERROR_EPSILON
   )
@@ -320,7 +326,7 @@ void Robot::myBlobUpdate (const geometry_msgs::TransformStamped& msg)
     // lets publish particles
     sensor_msgs::PointCloud particles;
     particles.header.stamp = ros::Time::now();
-    particles.header.frame_id = "map";
+    particles.header.frame_id = map_frame_;
     
     ROS_INFO("Num particles: %d", prediction_particle_filter_.getNumPredictionParticles());
     for (size_t i = 0, len = prediction_particle_filter_.getNumPredictionParticles(); i < len; i++)
@@ -345,20 +351,24 @@ void Robot::myBlobUpdate (const geometry_msgs::TransformStamped& msg)
          ROS_INFO("Particle %d at origin weight:%f ", i, point.z);
       }
     }
-  
+    
+    ROS_WARN("publishing particle");
     pub_particles_.publish(particles);
 
-    geometry_msgs::PoseStamped nav_goal_msg;
-    nav_goal_msg.header.stamp = ros::Time::now();
-    nav_goal_msg.header.frame_id = "map";
-    nav_goal_msg.pose.position.x = prediction_x;
-    nav_goal_msg.pose.position.y = prediction_y;
-    nav_goal_msg.pose.position.z = 0;
-    nav_goal_msg.pose.orientation.x = q.x();
-    nav_goal_msg.pose.orientation.y = q.y();
-    nav_goal_msg.pose.orientation.z = q.z();
-    nav_goal_msg.pose.orientation.w = q.w();
-    pub_nav_goal_.publish(nav_goal_msg);
+    if (isDeadManActive)
+    {
+      geometry_msgs::PoseStamped nav_goal_msg;
+      nav_goal_msg.header.stamp = ros::Time::now();
+      nav_goal_msg.header.frame_id = map_frame_;
+      nav_goal_msg.pose.position.x = prediction_x;
+      nav_goal_msg.pose.position.y = prediction_y;
+      nav_goal_msg.pose.position.z = 0;
+      nav_goal_msg.pose.orientation.x = q.x();
+      nav_goal_msg.pose.orientation.y = q.y();
+      nav_goal_msg.pose.orientation.z = q.z();
+      nav_goal_msg.pose.orientation.w = q.w();
+      pub_nav_goal_.publish(nav_goal_msg);
+    }
   }
   else
   {

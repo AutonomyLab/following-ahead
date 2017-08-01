@@ -190,10 +190,42 @@ int main(int argc, char** argv )
   sensor_msgs::PointCloud::Ptr pointCloudMsg (new sensor_msgs::PointCloud);
 
   ros::init(argc, argv, "person_follower_node"); 
-  ros::NodeHandle n;
-  Robot myRobot(n);
+  ros::NodeHandle n("~");
 
- 
+  std::string base_frame;
+  std::string odom_frame;
+  std::string map_frame;
+  std::string person_frame;
+
+  if (!n.getParam("base_frame", base_frame))
+  {
+    ROS_WARN("no param for base_frame, using default");
+    base_frame = "base_frame";
+  }
+
+  if (!n.getParam("odom_frame", odom_frame))
+  {
+    ROS_WARN("no param for odom_frame, using default");
+    odom_frame = "odom_frame";
+  }
+
+  if (!n.getParam("map_frame", map_frame))
+  {
+    ROS_WARN("no param for map_frame, using default");
+    map_frame = "map_frame";
+  }
+
+  if (!n.getParam("person_frame", person_frame))
+  {
+    ROS_WARN("no param for person_frame, using default");
+    person_frame = "person_frame";
+  }
+
+  
+  Robot myRobot(
+    n, base_frame, odom_frame, map_frame, person_frame
+  );
+
   // message_filters::Subscriber<yolo2::ImageDetections> detectionSub(n, "vision/yolo2/detections", 1);
   // message_filters::Subscriber<sensor_msgs::Image> depthSub(n, "camera/depth_registered/sw_registered/image_rect", 1);
   // typedef message_filters::sync_policies::ApproximateTime<yolo2::ImageDetections, sensor_msgs::Image> SyncPolicy;
@@ -203,8 +235,8 @@ int main(int argc, char** argv )
 
   pubPointCloud =  n.advertise<sensor_msgs::PointCloud>("person_cloud", 1);
   
-  ros::Subscriber odo_sub = n.subscribe("husky/odom", 1, &Robot::odometryCallback, &myRobot);
-  ros::Subscriber joy_sub = n.subscribe("teleop/joy", 1, &Robot::joyCallback, &myRobot);  
+  ros::Subscriber odo_sub = n.subscribe("/husky/odom", 1, &Robot::odometryCallback, &myRobot);
+  ros::Subscriber joy_sub = n.subscribe("/teleop/joy", 1, &Robot::joyCallback, &myRobot);  
   ros::Subscriber groundtruth_sub = n.subscribe("/person_follower/groundtruth_pose", 1, &Robot::myBlobUpdate, &myRobot);
   
 
