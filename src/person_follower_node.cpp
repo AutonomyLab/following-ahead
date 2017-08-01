@@ -235,11 +235,9 @@ int main(int argc, char** argv )
 
   pubPointCloud =  n.advertise<sensor_msgs::PointCloud>("person_cloud", 1);
   
-  ros::Subscriber odo_sub = n.subscribe("/husky/odom", 1, &Robot::odometryCallback, &myRobot);
   ros::Subscriber joy_sub = n.subscribe("/teleop/joy", 1, &Robot::joyCallback, &myRobot);  
   ros::Subscriber groundtruth_sub = n.subscribe("/person_follower/groundtruth_pose", 1, &Robot::myBlobUpdate, &myRobot);
   
-
   ros::spin();
 
 

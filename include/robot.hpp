@@ -9,11 +9,14 @@
 #include <ros/ros.h>
 #include <tf/transform_broadcaster.h>
 #include <tf/transform_listener.h>
+#include <message_filters/subscriber.h>
+#include <tf/message_filter.h>
 #include <sensor_msgs/Joy.h>
 #include <geometry_msgs/Twist.h>
 #include <geometry_msgs/TransformStamped.h>
 #include <nav_msgs/Odometry.h>
 #include <sensor_msgs/PointCloud.h>
+#include <boost/bind.hpp>
 #include "person_kalman.hpp"
 #include "ParticleFilter.hpp"
 #include "PredictionParticleFilter.hpp"
@@ -44,13 +47,17 @@ private:
     PredictionParticleFilter prediction_particle_filter_;
     PersonKalman *person_kalman_;
     
-    tf::TransformListener tf_listener;
-    tf::TransformBroadcaster tf_broadcaster;
-    tf::StampedTransform local_transform;
+    tf::TransformListener tf_listener_;
+    tf::TransformBroadcaster tf_broadcaster_;
+    tf::StampedTransform local_transform_;
+    tf::MessageFilter<nav_msgs::Odometry> * tf_filter_;
 
+    message_filters::Subscriber<nav_msgs::Odometry> odom_sub_;
+    
     ros::Publisher pub_nav_goal_;
 
     nav_msgs::Odometry current_odometry_;
+    geometry_msgs::TransformStamped current_relative_pose_;
 
     std::string base_frame_;
     std::string odom_frame_;
@@ -63,10 +70,10 @@ public:
             std::string map_frame, std::string person_frame   );
 
     void joyCallback(const sensor_msgs::Joy& msg);
-    void odometryCallback(const nav_msgs::Odometry& msg);
+    void odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& msg);
     cv::Point3f getRobotPose();
     cv::Point3f getHumanPose();
-    void myBlobUpdate (const geometry_msgs::TransformStamped& msg);
+    void myBlobUpdate (const boost::shared_ptr<const geometry_msgs::TransformStamped>& msg);
     int relativePoseCallback();
     int kiniectPoseCallback();
     int calculateDistination(cv::Point3f&);
