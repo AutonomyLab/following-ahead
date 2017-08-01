@@ -26,9 +26,9 @@ cv::Point3f Robot::getHumanPose()
 
 Robot::Robot( ros::NodeHandle n,
               std::string base_frame, std::string odom_frame, 
-              std::string map_frame, std::string person_frame  )
+              std::string map_frame, std::string person_frame, bool use_deadman  )
   : base_frame_(base_frame), odom_frame_(odom_frame), 
-    map_frame_(map_frame), person_frame_(person_frame)
+    map_frame_(map_frame), person_frame_(person_frame), use_deadman_(use_deadman)
 {
 
   cv::Mat Q = cv::Mat::zeros(NUM_STATES, NUM_STATES, CV_32F);
@@ -59,7 +59,10 @@ Robot::Robot( ros::NodeHandle n,
   pub_particles_ = n.advertise<sensor_msgs::PointCloud>("person_particle", 1);
   pub_nav_goal_ = n.advertise<geometry_msgs::PoseStamped>("/move_base_simple/goal_unthrottled", 1);
 
-  isDeadManActive = false;
+  if (use_deadman_)
+    isDeadManActive = false;
+  else
+    isDeadManActive = true;
 	robot_poses = new Filter(ROBOT_FILTER_SIZE);
 	human_poses = new Filter(PERSON_FILTER_SIZE);
 	destination_pose = new Filter(DESTINATION_FILTER_SIZE);
@@ -77,7 +80,7 @@ Robot::Robot( ros::NodeHandle n,
 
 void Robot::joyCallback(const sensor_msgs::Joy& msg)
 {
-  if (msg.buttons[0]==1) { // && msg.buttons[6]==1 && msg.buttons[7]==1 ) {
+  if (msg.buttons[0]==1 || !use_deadman_) { // && msg.buttons[6]==1 && msg.buttons[7]==1 ) {
     isDeadManActive = true;
   }
   else 
