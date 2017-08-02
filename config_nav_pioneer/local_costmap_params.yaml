@@ -5,10 +5,10 @@ local_costmap:
   robot_base_frame: /base_link
   update_frequency: 10.0
   publish_frequency: 10.0
-  static_map: true
+  static_map: false
   rolling_window: true
-  width: 5.0
-  height: 5.0
+  width: 3.0
+  height: 3.0
   resolution: 0.25
   origin_x: 0.0
   origin_y: 0.0

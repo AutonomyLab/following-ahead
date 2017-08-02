@@ -1,5 +1,10 @@
 <launch>
-	<include file="$(find video_stream_opencv)/launch/camera.launch" />
+	<remap from="/camera/rgb/image_rect_color" to= "/camera/color/image_raw"/>
+
 	<include file="$(find yolo2)/launch/yolo.launch" />
+
+	<include file= "$(find realsense_camera)/launch/zr300_nodelet_default.launch"/>
+	<node pkg="rqt_image_view" type="rqt_image_view" name="rqt_image_view" output="screen"/>
 	<node pkg="rostopic" type="rostopic" name="rostopic" args='pub -l /vision/yolo2/enable std_msgs/Bool "data: true"'/>
+
 </launch>
