@@ -463,7 +463,6 @@ void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& 
       }
     }
     
-    ROS_WARN("publishing particle");
     pub_particles_.publish(particles);
 
     if (isDeadManActive)
