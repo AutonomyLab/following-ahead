@@ -1,0 +1,6 @@
+<launch>
+	<node pkg="hokuyo_node" type="hokuyo_node" name="hokuyo_node" args="/dev/ttyACM0">
+		<param name="max_ang" value="2.0943951023931953" />
+		<param name="min_ang" value="-2.0943951023931953" />
+	</node>
+</launch>
