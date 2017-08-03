@@ -214,6 +214,16 @@ void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& 
   current_odometry_ = *msg;
   ROS_INFO("In odometry callback"); 
 
+  if  ( 
+        fabs(
+          current_odometry_.header.stamp.toSec() - current_relative_pose_.header.stamp.toSec()
+        ) > 0.15
+      )
+  {
+    // blob not updated, so return
+    return;
+  }
+
   human_relative_pose = cv::Point3f(current_relative_pose_.transform.translation.x, current_relative_pose_.transform.translation.y, 0);
 
   tf::StampedTransform r0_T_map; 
