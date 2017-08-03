@@ -212,7 +212,6 @@ int Robot::publishCmdVel(cv::Point3f destination)
 void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& msg)
 {
   current_odometry_ = *msg;
-  ROS_INFO("In odometry callback"); 
 
   if  ( 
         fabs(

@@ -3,7 +3,7 @@
 <launch>
  
 
-  <param name="/use_sim_time" value="true"/>
+  <param name="/use_sim_time" value="false"/>
 
   <node pkg="stage_ros" type="stageros" name="stageros_node" args="$(find person_follower)/worlds/simple.world" />
   
@@ -14,7 +14,7 @@
     <remap from="/husky/cmd_vel" to="/robot_0/cmd_vel" />
   </node>
 
-  <include file="$(find person_follower)/launch/ekf.launch" />
+  <!-- <include file="$(find person_follower)/launch/ekf.launch" /> -->
   <!-- <node pkg="slam_karto" type="slam_karto" name="slam_karto" output="screen"> -->
 
   <include file="$(find person_follower)/config_nav/move_base.xml" />
@@ -33,9 +33,10 @@
   </node>
 
 
-   <arg name="tf_map_scanmatch_transform_frame_name" default="robot_0/scanmatcher_frame"/>
+  <arg name="tf_map_scanmatch_transform_frame_name" default="robot_0/scanmatcher_frame"/>
   <arg name="base_frame" default="robot_0/base_link"/>
-  <arg name="odom_frame" default="robot_0/odom_combined"/>
+  <!-- <arg name="odom_frame" default="robot_0/odom_combined"/> -->
+  <arg name="odom_frame" default="robot_0/odom"/>
   <arg name="pub_map_odom_transform" default="true"/>
   <arg name="scan_subscriber_queue_size" default="5"/>
   <arg name="scan_topic" default="robot_0/base_scan_1"/>
@@ -51,8 +52,8 @@
     <param name="odom_frame" value="$(arg odom_frame)" />
     
     <!-- Tf use -->
-    <param name="use_tf_scan_transformation" value="true"/>
-    <param name="use_tf_pose_start_estimate" value="false"/>
+    <param name="use_tf_scan_transformation" value="false"/>
+    <param name="use_tf_pose_start_estimate" value="true"/>
     <param name="pub_map_odom_transform" value="$(arg pub_map_odom_transform)"/>
     
     <!-- Map size / start point -->
