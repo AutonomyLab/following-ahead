@@ -19,7 +19,7 @@ window
   size [ 928 1028 ] # in pixels
   scale 65.536   # pixels per meter
   center [ 9.867  -14.577 ]
-  rotate [ 0.000  -7.000 ]
+  rotate [ 0.000  -5.000 ]
   			
   show_data 0              # 1=on 0=off
 )
@@ -38,7 +38,7 @@ pioneer2dx
   color "red"
   # can refer to the robot by this name
   name "r0"
-  pose [ 9.792 -16.732 0.000 -164.643 ] 
+  pose [ 9.822 -16.733 0.000 -157.194 ] 
 
   # pioneer2dx's sonars will be ranger:0 and the laser will be ranger:1
   sicklaser( pose [ 0.000 0.000 0.000 0.000 ] ) 

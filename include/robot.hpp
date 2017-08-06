@@ -16,6 +16,10 @@
 #include <geometry_msgs/TransformStamped.h>
 #include <nav_msgs/Odometry.h>
 #include <sensor_msgs/PointCloud.h>
+
+#include <move_base_msgs/MoveBaseAction.h>
+#include <actionlib/client/simple_action_client.h>
+
 #include <boost/bind.hpp>
 #include "person_kalman.hpp"
 #include "ParticleFilter.hpp"
@@ -24,6 +28,8 @@
 class Robot
 {
 private:
+    typedef actionlib::SimpleActionClient<move_base_msgs::MoveBaseAction> MoveBaseClient;
+
     int time;
     ros::Publisher cmd_vel_publisher;
     tf::TransformListener listener;
@@ -55,7 +61,7 @@ private:
 
     message_filters::Subscriber<nav_msgs::Odometry> odom_sub_;
     
-    ros::Publisher pub_nav_goal_;
+    MoveBaseClient *move_base_client_ptr_;
 
     nav_msgs::Odometry current_odometry_;
     geometry_msgs::TransformStamped current_relative_pose_;
@@ -70,6 +76,8 @@ public:
             std::string base_frame, std::string odom_frame, 
             std::string map_frame, std::string person_frame, bool use_deadman   );
 
+    ~Robot();
+    
     void joyCallback(const sensor_msgs::Joy& msg);
     void odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& msg);
     cv::Point3f getRobotPose();

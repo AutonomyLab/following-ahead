@@ -57,7 +57,13 @@ Robot::Robot( ros::NodeHandle n,
 
   cmd_vel_publisher =  n.advertise<geometry_msgs::Twist>("/husky/cmd_vel", 1);
   pub_particles_ = n.advertise<sensor_msgs::PointCloud>("person_particle", 1);
-  pub_nav_goal_ = n.advertise<geometry_msgs::PoseStamped>("/move_base_simple/goal_unthrottled", 1);
+
+  // create actionlib client and tell it to spin a thread for that  
+  move_base_client_ptr_ = new MoveBaseClient("move_base", true);
+  while(!move_base_client_ptr_->waitForServer(ros::Duration(5.0)))
+  {
+    ROS_INFO("Waiting for the move_base action server to come up");
+  }
 
   odom_sub_.subscribe(n, "/husky/odom", 1);
   tf_filter_ = new tf::MessageFilter<nav_msgs::Odometry>(odom_sub_, tf_listener_, map_frame_, 1);
@@ -81,6 +87,11 @@ Robot::Robot( ros::NodeHandle n,
   referenceLastUpdated = 0;
 	pid_turn.set(AVOID_TURN, -AVOID_TURN, AVOID_TURN, 0.0100, 0.01);
   pid_cruse.set(CRUISE_SPEED, -CRUISE_SPEED, -CRUISE_SPEED  , .0100, 0.001);
+}
+
+Robot::~Robot()
+{
+  delete move_base_client_ptr_;
 }
 
 void Robot::joyCallback(const sensor_msgs::Joy& msg)
@@ -116,8 +127,6 @@ void Robot::myBlobUpdate(const boost::shared_ptr<const geometry_msgs::TransformS
   transform_r0_r1.setRotation(r0_T_map.getRotation());
   tf_broadcaster_.sendTransform(tf::StampedTransform(transform_r0_r1, ros::Time::now(), base_frame_, person_frame_));
 
-  ROS_INFO("Blob-tf time diff: %f", r0_T_map.stamp_.toSec() - current_relative_pose_.header.stamp.toSec());
-  ROS_INFO("Broadcasting robot_0, robot_1 tf");
 }
 
 //-------------------------avg_dest is return parameter of this function ------------
@@ -246,7 +255,6 @@ void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& 
       human_relative_pose, r0_T_map,
       base_frame_, map_frame_ 
     );
-    ROS_INFO("particle_filter_ initialized!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
   }
   else
   {
@@ -303,7 +311,6 @@ void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& 
   float robot_x_variance = fabs(ROBOT_VELOCITY_VARIANCE_SCALING * cos_robot_orientation * current_odometry_.twist.twist.linear.x);
   float robot_y_variance = fabs(ROBOT_VELOCITY_VARIANCE_SCALING * sin_robot_orientation * current_odometry_.twist.twist.linear.x);
 
-  ROS_INFO("Odom: %f, %f", current_odometry_.twist.twist.linear.x, current_odometry_.twist.twist.angular.z);
 
   cv::Mat J_range = cv::Mat::zeros(2, 1, CV_32F);
   cv::Mat J_bearing = cv::Mat::zeros(2, 1, CV_32F);
@@ -336,8 +343,7 @@ void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& 
   R.at<float>(0, 0) += 0.01;
   R.at<float>(1, 1) += 0.01;
 
-  std::cout << "R: \n" << R << std::endl; 
-
+  
   person_kalman_->update(y, LOOP_TIME, R);
   cv::Mat new_state = person_kalman_->state();
 
@@ -448,7 +454,6 @@ void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& 
     particles.header.stamp = ros::Time::now();
     particles.header.frame_id = map_frame_;
     
-    ROS_INFO("Num particles: %d", prediction_particle_filter_.getNumPredictionParticles());
     for (size_t i = 0, len = prediction_particle_filter_.getNumPredictionParticles(); i < len; i++)
     {
       PredictionParticleFilter::PredictionParticle particle = prediction_particle_filter_.getPredictionParticleAt(i);
@@ -474,19 +479,39 @@ void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& 
     
     pub_particles_.publish(particles);
 
-    if (isDeadManActive)
+
+    cv::Point3f prediction_global(prediction_x, prediction_y, 0);
+    cv::Point3f prediction_local = transformPoint(r0_T_map, prediction_global);
+
+    if (isDeadManActive && 
+        prediction_local.x > 0 // don't follow if robot is behind
+    )
     {
-      geometry_msgs::PoseStamped nav_goal_msg;
-      nav_goal_msg.header.stamp = ros::Time::now();
-      nav_goal_msg.header.frame_id = map_frame_;
-      nav_goal_msg.pose.position.x = prediction_x;
-      nav_goal_msg.pose.position.y = prediction_y;
-      nav_goal_msg.pose.position.z = 0;
-      nav_goal_msg.pose.orientation.x = q.x();
-      nav_goal_msg.pose.orientation.y = q.y();
-      nav_goal_msg.pose.orientation.z = q.z();
-      nav_goal_msg.pose.orientation.w = q.w();
-      pub_nav_goal_.publish(nav_goal_msg);
+      move_base_msgs::MoveBaseGoal nav_goal_msg;
+
+      nav_goal_msg.target_pose.header.stamp = ros::Time::now();
+      nav_goal_msg.target_pose.header.frame_id = map_frame_;
+      nav_goal_msg.target_pose.pose.position.x = prediction_x;
+      nav_goal_msg.target_pose.pose.position.y = prediction_y;
+      nav_goal_msg.target_pose.pose.position.z = 0;
+      nav_goal_msg.target_pose.pose.orientation.x = q.x();
+      nav_goal_msg.target_pose.pose.orientation.y = q.y();
+      nav_goal_msg.target_pose.pose.orientation.z = q.z();
+      nav_goal_msg.target_pose.pose.orientation.w = q.w();
+      move_base_client_ptr_->sendGoal(nav_goal_msg);
+    }
+    else // if (!isDeadManActive)
+    {
+      // cancel anything that going on
+      actionlib::SimpleClientGoalState move_base_state = move_base_client_ptr_->getState();
+      if (
+          move_base_state == actionlib::SimpleClientGoalState::ACTIVE ||
+          move_base_state == actionlib::SimpleClientGoalState::PENDING
+      )
+      {
+        ROS_INFO("Cancelling move_base goals");
+        move_base_client_ptr_->cancelGoal();
+      }
     }
   }
   else

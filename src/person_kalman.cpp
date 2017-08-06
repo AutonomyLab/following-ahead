@@ -99,19 +99,14 @@ void PersonKalman::update(const cv::Mat& y) {
     x_hat_new.at<float>(THETA_IDX, 0) = theta; 
   }
 
-  std::cout << "A: \n" << A << std::endl;
-  std::cout << "Measurement: " << y.t() << std::endl;
-  std::cout << "Prior: " << x_hat_new.t() << std::endl;
 
   P = A*P*A.t() + Q;
   K = P*C.t()*(C*P*C.t() + R).inv();
   
   x_hat_new += K * (y - C*x_hat_new);
-  std::cout << "Posterior: " << x_hat_new.t() << std::endl;
+ 
   P = (I - K*C)*P;
   x_hat = x_hat_new;
-
-  // std::cout << "Posteriori: " << x_hat.t() << std::endl;
 
   t += dt;
 }
