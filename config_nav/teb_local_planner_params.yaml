@@ -2,7 +2,7 @@
 base_local_planner: teb_local_planner/TebLocalPlannerROS
 
 TebLocalPlannerROS:
-  odom_topic: /robot_0/odom
+  # odom_topic: /robot_0/odom
   map_frame: /map
      
   # Trajectory
