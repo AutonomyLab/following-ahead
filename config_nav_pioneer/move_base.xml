@@ -2,17 +2,27 @@
   <node ns="local_costmap" name="voxel_grid_throttle" pkg="topic_tools" type="throttle" args="messages voxel_grid 3.0 voxel_grid_throttled" />
 
   <node pkg="move_base" type="move_base" respawn="false" name="move_base_node" output="screen">
-    <param name="footprint_padding" value="0.50" />
+    <param name="footprint_padding" value="0.05" />
     <param name="controller_frequency" value="20.0" />
     <param name="controller_patience" value="2.0" />
     <param name="recovery_behavior_enabled" value="true" />
     <!-- <remap from="/cmd_vel" to="/robot_0/cmd_vel" /> -->
 
-    <rosparam file="$(find person_follower)/config_nav_pioneer/costmap_common_params.yaml" command="load" ns="global_costmap" />
-    <rosparam file="$(find person_follower)/config_nav_pioneer/costmap_common_params.yaml" command="load" ns="local_costmap" />
-    <rosparam file="$(find person_follower)/config_nav_pioneer/local_costmap_params.yaml" command="load" />
-    <rosparam file="$(find person_follower)/config_nav_pioneer/global_costmap_params.yaml" command="load" />
+    <rosparam file="$(find person_follower)/config_nav/costmap_common_params.yaml" command="load" ns="global_costmap" />
+    <rosparam file="$(find person_follower)/config_nav/costmap_common_params.yaml" command="load" ns="local_costmap" />
+    <rosparam file="$(find person_follower)/config_nav/local_costmap_params.yaml" command="load" />
+    <rosparam file="$(find person_follower)/config_nav/global_costmap_params.yaml" command="load" />
     
+    <!-- Costmap common param (for both local and global) -->
+    <param name="global_costmap/observation_sources" value="scan" />
+    <param name="local_costmap/observation_sources" value="scan" />
+
+    <param name="local_costmap/robot_base_frame" value="base_link" />
+    <param name="global_costmap/robot_base_frame" value="base_link" />
+
+    <!-- Local param -->
+    <param name="TebLocalPlannerROS/odom_topic" value="/odom" />
+
     <!-- For default base planner -->
     <!-- <rosparam file="$(find person_follower)/config_nav_pioneer/base_local_planner_params.yaml" command="load" /> -->
 
