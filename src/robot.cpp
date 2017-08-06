@@ -65,9 +65,11 @@ Robot::Robot( ros::NodeHandle n,
     ROS_INFO("Waiting for the move_base action server to come up");
   }
 
-  odom_sub_.subscribe(n, "/husky/odom", 1);
-  tf_filter_ = new tf::MessageFilter<nav_msgs::Odometry>(odom_sub_, tf_listener_, map_frame_, 1);
-  tf_filter_->registerCallback( boost::bind(&Robot::odometryCallback, this, _1) );  
+  // odom_sub_.subscribe(n, "/husky/odom", 1);
+  // tf_filter_ = new tf::MessageFilter<nav_msgs::Odometry>(odom_sub_, tf_listener_, map_frame_, 1);
+  // tf_filter_->registerCallback( boost::bind(&Robot::odometryCallback, this, _1) );  
+
+  odom_topic_subscriber_ = n.subscribe("/husky/odom", 1, &Robot::odometryCallback, this);
 
   if (use_deadman_)
     isDeadManActive = false;
@@ -222,15 +224,15 @@ void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& 
 {
   current_odometry_ = *msg;
 
-  if  ( 
-        fabs(
-          current_odometry_.header.stamp.toSec() - current_relative_pose_.header.stamp.toSec()
-        ) > 0.15
-      )
-  {
-    // blob not updated, so return
-    return;
-  }
+  // if  ( 
+  //       fabs(
+  //         current_odometry_.header.stamp.toSec() - current_relative_pose_.header.stamp.toSec()
+  //       ) > 0.15
+  //     )
+  // {
+  //   // blob not updated, so return
+  //   return;
+  // }
 
   human_relative_pose = cv::Point3f(current_relative_pose_.transform.translation.x, current_relative_pose_.transform.translation.y, 0);
 
@@ -263,8 +265,6 @@ void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& 
   }
 
 
-
-
   cv::Point3f robot_pose;
   cv::Mat state = person_kalman_->state();
   
@@ -286,7 +286,10 @@ void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& 
     initState.at<float>(THETA_IDX, 0) = 0;
 
     person_kalman_->init(0, initState);
+    ROS_INFO("EKF initialized");
   }
+
+
   
   // THIS IS NOT RIGHT, THE MEASUREMENTS ARE ABSOLUTE POSE, NOT RELATIVE
   // the z in the relative pose is actually the depth (range). Lol!!!
@@ -310,7 +313,6 @@ void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& 
   float robot_orientation_variance = fabs(ROBOT_ORIENTATION_VARIANCE_SCALING * current_odometry_.twist.twist.angular.z);
   float robot_x_variance = fabs(ROBOT_VELOCITY_VARIANCE_SCALING * cos_robot_orientation * current_odometry_.twist.twist.linear.x);
   float robot_y_variance = fabs(ROBOT_VELOCITY_VARIANCE_SCALING * sin_robot_orientation * current_odometry_.twist.twist.linear.x);
-
 
   cv::Mat J_range = cv::Mat::zeros(2, 1, CV_32F);
   cv::Mat J_bearing = cv::Mat::zeros(2, 1, CV_32F);
@@ -343,7 +345,6 @@ void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& 
   R.at<float>(0, 0) += 0.01;
   R.at<float>(1, 1) += 0.01;
 
-  
   person_kalman_->update(y, LOOP_TIME, R);
   cv::Mat new_state = person_kalman_->state();
 
@@ -512,6 +513,10 @@ void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& 
         ROS_INFO("Cancelling move_base goals");
         move_base_client_ptr_->cancelGoal();
       }
+    }
+    else
+    {
+      ROS_WARN("Can't give goal, Deadman switch not pressed!!!");
     }
   }
   else

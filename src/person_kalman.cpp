@@ -92,7 +92,7 @@ void PersonKalman::update(const cv::Mat& y) {
 
     x_hat_new.at<float>(THETA_IDX, 0) = atan2(sum_vector.y, sum_vector.x);
 
-    ROS_WARN("new theta:%f old theta:%f average:%f",new_theta, theta, x_hat_new.at<float>(THETA_IDX, 0));
+    // ROS_WARN("new theta:%f old theta:%f average:%f",new_theta, theta, x_hat_new.at<float>(THETA_IDX, 0));
   }
   else
   {
@@ -104,7 +104,6 @@ void PersonKalman::update(const cv::Mat& y) {
   K = P*C.t()*(C*P*C.t() + R).inv();
   
   x_hat_new += K * (y - C*x_hat_new);
- 
   P = (I - K*C)*P;
   x_hat = x_hat_new;
 

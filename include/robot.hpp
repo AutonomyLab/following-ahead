@@ -60,6 +60,7 @@ private:
     tf::MessageFilter<nav_msgs::Odometry> * tf_filter_;
 
     message_filters::Subscriber<nav_msgs::Odometry> odom_sub_;
+    ros::Subscriber odom_topic_subscriber_;
     
     MoveBaseClient *move_base_client_ptr_;
 
