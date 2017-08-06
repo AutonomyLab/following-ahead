@@ -57,7 +57,7 @@
 	    <param name="ymin" value="-200"/>
 	    <param name="xmax" value="200"/>
 	    <param name="ymax" value="200"/>
-	    <rosparam command="load" file="$(find person_follower)/config_nav_pioneer/mapper_params.yaml" />
+	    <rosparam command="load" file="$(find person_follower)/config_nav/mapper_params.yaml" />
 	</node>
 
 	<!-- <include file="$(find person_follower)/config_nav_pioneer/move_base.xml" /> -->
