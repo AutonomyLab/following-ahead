@@ -27,7 +27,7 @@
     <!-- <rosparam file="$(find person_follower)/config_nav_pioneer/base_local_planner_params.yaml" command="load" /> -->
 
     <!-- For teb base planner -->
-    <rosparam file="$(find person_follower)/config_nav_pioneer/teb_local_planner_params.yaml" command="load" />
+    <rosparam file="$(find person_follower)/config_nav/teb_local_planner_params.yaml" command="load" />
     <param name="base_local_planner" value="teb_local_planner/TebLocalPlannerROS" />
   </node>
 </launch>

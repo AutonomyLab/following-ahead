@@ -60,15 +60,18 @@
 	    <rosparam command="load" file="$(find person_follower)/config_nav/mapper_params.yaml" />
 	</node>
 
-	<!-- <include file="$(find person_follower)/config_nav_pioneer/move_base.xml" /> -->
+	<include file="$(find person_follower)/config_nav_pioneer/move_base.xml" />
 
 	<node pkg="rviz" type="rviz" name="rviz" output="screen" args="-d $(find person_follower)/config/pioneer.rviz"/>
 	
 	<node pkg="joy" type="joy_node" name="joy_node" output="screen">
+		<remap from="joy" to="teleop/joy" />
 		<param name="dev" type="string" value="/dev/input/js0" />
 		<!-- <param name="dev" type="string" value="/dev/input/js2" /> -->
 		<param name="autorepeat_rate" value="10" />
 	</node>
 
-	<node pkg="teleop_twist_joy" type="teleop_node" name="teleop_node" />
+	<!-- <node pkg="teleop_twist_joy" type="teleop_node" name="teleop_node">
+		<remap from="joy" to="teleop/joy" />
+	</node> -->
 </launch>
