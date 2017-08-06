@@ -514,10 +514,6 @@ void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& 
         move_base_client_ptr_->cancelGoal();
       }
     }
-    else
-    {
-      ROS_WARN("Can't give goal, Deadman switch not pressed!!!");
-    }
   }
   else
   {

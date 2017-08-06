@@ -66,21 +66,13 @@
 	<node pkg="rviz" type="rviz" name="rviz" output="screen" args="-d $(find person_follower)/config/pioneer.rviz"/>
 	
 	<node pkg="joy" type="joy_node" name="joy_node" output="screen">
-<<<<<<< Updated upstream
-		<remap from="joy" to="teleop/joy" />
-=======
 		<remap from="/joy" to="/teleop/joy" />
->>>>>>> Stashed changes
 		<param name="dev" type="string" value="/dev/input/js0" />
 		<!-- <param name="dev" type="string" value="/dev/input/js2" /> -->
 		<param name="autorepeat_rate" value="10" />
 	</node>
 
-<<<<<<< Updated upstream
 	<!-- <node pkg="teleop_twist_joy" type="teleop_node" name="teleop_node">
 		<remap from="joy" to="teleop/joy" />
 	</node> -->
-=======
-	<!-- <node pkg="teleop_twist_joy" type="teleop_node" name="teleop_node" /> -->
->>>>>>> Stashed changes
 </launch>
