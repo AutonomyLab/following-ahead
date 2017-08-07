@@ -65,11 +65,11 @@ Robot::Robot( ros::NodeHandle n,
     ROS_INFO("Waiting for the move_base action server to come up");
   }
 
-  // odom_sub_.subscribe(n, "/husky/odom", 1);
-  // tf_filter_ = new tf::MessageFilter<nav_msgs::Odometry>(odom_sub_, tf_listener_, map_frame_, 1);
-  // tf_filter_->registerCallback( boost::bind(&Robot::odometryCallback, this, _1) );  
+  odom_sub_.subscribe(n, "/husky/odom", 1);
+  tf_filter_ = new tf::MessageFilter<nav_msgs::Odometry>(odom_sub_, tf_listener_, map_frame_, 1);
+  tf_filter_->registerCallback( boost::bind(&Robot::odometryCallback, this, _1) );  
 
-  odom_topic_subscriber_ = n.subscribe("/husky/odom", 1, &Robot::odometryCallback, this);
+  // odom_topic_subscriber_ = n.subscribe("/husky/odom", 1, &Robot::odometryCallback, this);
 
   if (use_deadman_)
     isDeadManActive = false;
@@ -224,15 +224,15 @@ void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& 
 {
   current_odometry_ = *msg;
 
-  // if  ( 
-  //       fabs(
-  //         current_odometry_.header.stamp.toSec() - current_relative_pose_.header.stamp.toSec()
-  //       ) > 0.15
-  //     )
-  // {
-  //   // blob not updated, so return
-  //   return;
-  // }
+  if  ( 
+        fabs(
+          current_odometry_.header.stamp.toSec() - current_relative_pose_.header.stamp.toSec()
+        ) > 0.15
+      )
+  {
+    // blob not updated, so return
+    return;
+  }
 
   human_relative_pose = cv::Point3f(current_relative_pose_.transform.translation.x, current_relative_pose_.transform.translation.y, 0);
 
