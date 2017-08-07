@@ -55,9 +55,9 @@ Robot::Robot( ros::NodeHandle n,
 
   person_kalman_ = new PersonKalman(0.1, Q, R, P);
 
-  cmd_vel_publisher =  n.advertise<geometry_msgs::Twist>("/husky/cmd_vel", 1);
+  cmd_vel_publisher =  n.advertise<geometry_msgs::Twist>("/person_follower/zero_cmd_vel", 1);
   pub_particles_ = n.advertise<sensor_msgs::PointCloud>("person_particle", 1);
-
+  
   // create actionlib client and tell it to spin a thread for that  
   move_base_client_ptr_ = new MoveBaseClient("move_base", true);
   while(!move_base_client_ptr_->waitForServer(ros::Duration(5.0)))
@@ -484,35 +484,41 @@ void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& 
     cv::Point3f prediction_global(prediction_x, prediction_y, 0);
     cv::Point3f prediction_local = transformPoint(r0_T_map, prediction_global);
 
-    if (isDeadManActive && 
-        prediction_local.x > 0 // don't follow if robot is behind
+    static double nav_goal_last_sent = 0;
+    if (
+      // true
+      isDeadManActive && 
+      prediction_local.x > 0 // don't follow if robot is behind
     )
     {
-      move_base_msgs::MoveBaseGoal nav_goal_msg;
+      if (ros::Time::now().toSec() - nav_goal_last_sent > 1.0)
+      {
+        move_base_msgs::MoveBaseGoal nav_goal_msg;
 
-      nav_goal_msg.target_pose.header.stamp = ros::Time::now();
-      nav_goal_msg.target_pose.header.frame_id = map_frame_;
-      nav_goal_msg.target_pose.pose.position.x = prediction_x;
-      nav_goal_msg.target_pose.pose.position.y = prediction_y;
-      nav_goal_msg.target_pose.pose.position.z = 0;
-      nav_goal_msg.target_pose.pose.orientation.x = q.x();
-      nav_goal_msg.target_pose.pose.orientation.y = q.y();
-      nav_goal_msg.target_pose.pose.orientation.z = q.z();
-      nav_goal_msg.target_pose.pose.orientation.w = q.w();
-      move_base_client_ptr_->sendGoal(nav_goal_msg);
+        nav_goal_msg.target_pose.header.stamp = ros::Time::now();
+        nav_goal_msg.target_pose.header.frame_id = map_frame_;
+        nav_goal_msg.target_pose.pose.position.x = prediction_x;
+        nav_goal_msg.target_pose.pose.position.y = prediction_y;
+        nav_goal_msg.target_pose.pose.position.z = 0;
+        nav_goal_msg.target_pose.pose.orientation.x = q.x();
+        nav_goal_msg.target_pose.pose.orientation.y = q.y();
+        nav_goal_msg.target_pose.pose.orientation.z = q.z();
+        nav_goal_msg.target_pose.pose.orientation.w = q.w();
+        move_base_client_ptr_->sendGoal(nav_goal_msg);
+
+        nav_goal_last_sent = ros::Time::now().toSec();
+      } 
     }
     else // if (!isDeadManActive)
     {
-      // cancel anything that going on
-      actionlib::SimpleClientGoalState move_base_state = move_base_client_ptr_->getState();
-      if (
-          move_base_state == actionlib::SimpleClientGoalState::ACTIVE ||
-          move_base_state == actionlib::SimpleClientGoalState::PENDING
-      )
-      {
-        ROS_INFO("Cancelling move_base goals");
-        move_base_client_ptr_->cancelGoal();
-      }
+      // cancel anything that's going on
+      ROS_INFO("Cancelling move_base goals");
+      
+      geometry_msgs::Twist cmd_vel;
+      cmd_vel.linear.x = 0;
+      cmd_vel.linear.z = 1; // make it fly :)
+      cmd_vel.angular.z = 0;
+      cmd_vel_publisher.publish(cmd_vel);
     }
   }
   else

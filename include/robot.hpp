@@ -32,6 +32,7 @@ private:
 
     int time;
     ros::Publisher cmd_vel_publisher;
+    
     tf::TransformListener listener;
     int referenceLastUpdated;
     Filter* robot_poses;

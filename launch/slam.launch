@@ -6,11 +6,13 @@
 	<arg name="use_deadman" default="false" />
 	<arg name="person_frame" default="robot_1/base_footprint" />
 
+
 	<param name="/use_sim_time" value="true"/>
 	<arg name="move_base_goal_frequency" default="0.5" />
 
 	<node pkg="stage_ros" type="stageros" name="stageros_node" args="$(find person_follower)/worlds/simple.world">
 		<remap from="/robot_0/blob" to="/robot_0/blob_0" />
+		<remap from="/robot_0/cmd_vel" to="/cmd_vel" />
 	</node>
 	
 	<node pkg="person_follower" type="simulation_interface_node" name="simulation_interface_node" output="screen" />
@@ -23,11 +25,20 @@
 		<param name="use_deadman" value="$(arg use_deadman)" type="bool"/>
 
 		<remap from="/husky/odom" to="/robot_0/odom" />
-		<remap from="/husky/cmd_vel" to="/robot_0/cmd_vel" />
+		<remap from="/husky/cmd_vel" to="/cmd_vel" />
 	</node>
 
 	<node name="nav_goal_throttler" type="throttle" pkg="topic_tools" args="messages /move_base_simple/goal_unthrottled $(arg move_base_goal_frequency) /move_base_simple/goal" />
 
+	<!-- nodelets and its manager for cmd_vel mux -->
+	<node pkg="nodelet" type="nodelet" name="cmd_vel_mux_nodelet_manager"  args="manager"/>
+	
+	<node pkg="nodelet" type="nodelet" name="yocs_cmd_vel_mux"
+        args="load yocs_cmd_vel_mux/CmdVelMuxNodelet cmd_vel_mux_nodelet_manager">
+		<param name="yaml_cfg_file" value="$(find person_follower)/config_nav/cmd_vel_mux.yaml"/>
+	</node>
+	<!-- nodelets and its manager for cmd_vel mux -->
+	
 	<!-- <include file="$(find person_follower)/launch/ekf.launch" /> -->
 	
 	<!-- <node pkg="slam_karto" type="slam_karto" name="slam_karto" output="screen"> -->

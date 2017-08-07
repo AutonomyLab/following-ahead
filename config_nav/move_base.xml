@@ -5,7 +5,7 @@
     <param name="controller_frequency" value="20.0" />
     <param name="controller_patience" value="2.0" />
     <param name="recovery_behavior_enabled" value="true" />
-    <remap from="/cmd_vel" to="/robot_0/cmd_vel" />
+    <remap from="/cmd_vel" to="/move_base/cmd_vel" />
 
     <rosparam file="$(find person_follower)/config_nav/costmap_common_params.yaml" command="load" ns="global_costmap" />
     <rosparam file="$(find person_follower)/config_nav/costmap_common_params.yaml" command="load" ns="local_costmap" />
