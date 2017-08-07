@@ -13,7 +13,7 @@
 	<node pkg="tf" type="static_transform_publisher" name="static_transform_publisher1" args="0 0 0 0 0 0 base_link laser 50"/> -->
 
 	<include file="$(find person_follower)/launch/hokuyo.launch" />
-	<node pkg="tf" type="static_transform_publisher" name="static_transform_publisher" args="0.11 0 0.220 0 0 0 base_link laser 50"/>
+	<node pkg="tf" type="static_transform_publisher" name="static_transform_publisher" args="0.11 0 0.220 0 0 0 base_link laser 10"/>
 
 
 	

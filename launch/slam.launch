@@ -3,7 +3,7 @@
 	<!-- <arg name="odom_frame" default="robot_0/odom_combined" /> -->
 	<arg name="odom_frame" default="robot_0/odom" />
 	<arg name="map_frame" default="map" />
-	<arg name="use_deadman" default="true" />
+	<arg name="use_deadman" default="false" />
 	<arg name="person_frame" default="robot_1/base_footprint" />
 
 	<param name="/use_sim_time" value="true"/>
