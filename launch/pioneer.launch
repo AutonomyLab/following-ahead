@@ -33,6 +33,15 @@
 	
 	<node name="nav_goal_throttler" type="throttle" pkg="topic_tools" args="messages /move_base_simple/goal_unthrottled $(arg move_base_goal_frequency) /move_base_simple/goal" />
 
+	<!-- nodelets and its manager for cmd_vel mux -->
+	<node pkg="nodelet" type="nodelet" name="cmd_vel_mux_nodelet_manager"  args="manager"/>
+	
+	<node pkg="nodelet" type="nodelet" name="yocs_cmd_vel_mux"
+        args="load yocs_cmd_vel_mux/CmdVelMuxNodelet cmd_vel_mux_nodelet_manager">
+		<param name="yaml_cfg_file" value="$(find person_follower)/config_nav/cmd_vel_mux.yaml"/>
+	</node>
+	<!-- nodelets and its manager for cmd_vel mux -->
+
 	<!-- <node pkg="robot_pose_ekf" type="robot_pose_ekf" name="robot_pose_ekf">
 	    <param name="output_frame" value="/odom_combined"/>
 	    <param name="base_footprint_frame" value="/base_link" />
