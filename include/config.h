@@ -6,7 +6,7 @@
 #define DISTANCE_EPSILON 0.01
 #define VELOCITY_ERROR_EPSILON 1.0
 #define POSITION_ERROR_EPSILON 1.0
-#define ORIENTATION_ERROR_EPSILON 2.5
+#define ORIENTATION_ERROR_EPSILON 1.5
 
 #define PERSON_FILTER_SIZE 1
 #define ROBOT_FILTER_SIZE 1
@@ -15,7 +15,6 @@
 #define BLOB_UPDATE_TIME 1./120
 #define NUM_UPDATE_REF_FRAME 300
 
-#define FOLLOW_DIST 2.5
 #define CRUISE_SPEED 0.3
 #define AVOID_SPEED 0.01
 #define AVOID_TURN 0.9
@@ -85,7 +84,7 @@
 #define ROBOT_VELOCITY_VARIANCE_SCALING 0.5
 
 // lookahead distance (m) for prediction
-#define PREDICTION_LOOKAHEAD_DISTANCE 4.0
+#define PREDICTION_LOOKAHEAD_DISTANCE 2.0
 
 // maximum orientation change between two iterations (used for calculating probability of the measurement)
 #define MAX_DEL_THETA 0.17453292519943295 // 10 degrees
