@@ -60,7 +60,7 @@
 		<!-- <param name="odom_frame" value="odom_combined"/> -->
 		<param name="base_frame" value="$(arg base_frame)"/>
 		<param name="map_frame" value="$(arg map_frame)"/>
-	    <param name="map_update_interval" value="1"/>
+	    <param name="map_update_interval" value="0.1"/>
 	    <param name="resolution" value="1000"/>
 	    <param name="maxRange" value="7"/>
 	    <param name="xmin" value="-200"/>

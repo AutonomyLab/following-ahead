@@ -2,7 +2,6 @@
 base_local_planner: teb_local_planner/TebLocalPlannerROS
 
 TebLocalPlannerROS:
-  # odom_topic: /robot_0/odom
   map_frame: /map
      
   # Trajectory
@@ -64,7 +63,7 @@ TebLocalPlannerROS:
   optimization_activate: True
   optimization_verbose: False
   penalty_epsilon: 0.1
-  weight_max_vel_x: 4
+  weight_max_vel_x: 0.5 # 4
   weight_max_vel_theta: 1
   weight_acc_lim_x: 100
   weight_acc_lim_theta: 1
@@ -89,6 +88,9 @@ TebLocalPlannerROS:
   obstacle_keypoint_offset: 0.1
   obstacle_heading_threshold: 0.45
   visualize_hc_graph: False
+
+  acc_lim_th: 0.4
+  acc_lim_x: 0.25
 
 
 

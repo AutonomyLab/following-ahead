@@ -106,9 +106,7 @@ Visualization Manager:
           Value: true
         prediction_kalman:
           Value: true
-        vicon/Roy/Roy:
-          Value: true
-        vicon/helmet/helmet:
+        vicon/helmet2/helmet2:
           Value: true
         vicon/priss_follower/priss_follower:
           Value: true
@@ -194,9 +192,9 @@ Visualization Manager:
       Enabled: true
       Invert Rainbow: false
       Max Color: 255; 255; 255
-      Max Intensity: 0.00405065436
+      Max Intensity: 0.00369779812
       Min Color: 0; 0; 0
-      Min Intensity: 1.23131258e-05
+      Min Intensity: 5.97089047e-06
       Name: PointCloud
       Position Transformer: XYZ
       Queue Size: 10
@@ -239,6 +237,26 @@ Visualization Manager:
       Use Fixed Frame: true
       Use rainbow: true
       Value: true
+    - Alpha: 0.699999988
+      Class: rviz/Map
+      Color Scheme: map
+      Draw Behind: false
+      Enabled: true
+      Name: Map
+      Topic: /move_base_node/global_costmap/costmap
+      Unreliable: false
+      Use Timestamp: false
+      Value: true
+    - Alpha: 0.699999988
+      Class: rviz/Map
+      Color Scheme: map
+      Draw Behind: false
+      Enabled: true
+      Name: Map
+      Topic: /move_base_node/local_costmap/costmap
+      Unreliable: false
+      Use Timestamp: false
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
@@ -263,7 +281,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 10.9789925
+      Distance: 8.91467285
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.0599999987
         Stereo Focal Distance: 1
@@ -277,10 +295,10 @@ Visualization Manager:
       Focal Shape Size: 0.0500000007
       Name: Current View
       Near Clip Distance: 0.00999999978
-      Pitch: 0.664797127
+      Pitch: 0.689797103
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 2.80446959
+      Yaw: 2.89947057
     Saved: ~
 Window Geometry:
   Displays:
