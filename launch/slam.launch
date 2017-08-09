@@ -47,13 +47,14 @@
 		<param name="odom_frame" value="$(arg odom_frame)"/>
 		<param name="base_frame" value="$(arg base_frame)"/>
 		<param name="map_frame" value="map"/>
-	    <param name="map_update_interval" value="1"/>
-	    <param name="resolution" value="1000"/>
+	    <param name="map_update_interval" value="0.1"/>
+	    <param name="particles" value="20" />
+	    <param name="delta" value="0.1"/>
 	    <param name="maxRange" value="7"/>
-	    <param name="xmin" value="-200"/>
-	    <param name="ymin" value="-200"/>
-	    <param name="xmax" value="200"/>
-	    <param name="ymax" value="200"/>
+	    <param name="xmin" value="-15"/>
+	    <param name="ymin" value="-15"/>
+	    <param name="xmax" value="15"/>
+	    <param name="ymax" value="15"/>
 	    <rosparam command="load" file="$(find person_follower)/config_nav/mapper_params.yaml" />
 	</node>
 

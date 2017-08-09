@@ -12,6 +12,7 @@
 #include <nav_msgs/Odometry.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/Quaternion.h>
+#include <costmap_2d/costmap_2d_ros.h>
 #include "utils.hpp"
 
 cv::Point3f Robot::getRobotPose()
@@ -28,7 +29,8 @@ Robot::Robot( ros::NodeHandle n,
               std::string base_frame, std::string odom_frame, 
               std::string map_frame, std::string person_frame, bool use_deadman  )
   : base_frame_(base_frame), odom_frame_(odom_frame), 
-    map_frame_(map_frame), person_frame_(person_frame), use_deadman_(use_deadman)
+    map_frame_(map_frame), person_frame_(person_frame), use_deadman_(use_deadman),
+    image_transport_(n)
 {
 
   cv::Mat Q = cv::Mat::zeros(NUM_STATES, NUM_STATES, CV_32F);
@@ -70,6 +72,9 @@ Robot::Robot( ros::NodeHandle n,
   // tf_filter_->registerCallback( boost::bind(&Robot::odometryCallback, this, _1) );  
 
   odom_topic_subscriber_ = n.subscribe("/husky/odom", 1, &Robot::odometryCallback, this);
+  map_image_pub_ = image_transport_.advertise("map_image", 1);
+
+  map_service_client_ = n.serviceClient<nav_msgs::GetMap>("/dynamic_map", true);
 
   if (use_deadman_)
     isDeadManActive = false;
@@ -218,6 +223,64 @@ int Robot::publishCmdVel(cv::Point3f destination)
   return 0; 
 }
 
+void Robot::mapCallback(nav_msgs::OccupancyGrid &map_msg)
+{
+  cv::Mat map_image(map_msg.info.width, map_msg.info.height, CV_8UC1, (void*)map_msg.data.data());
+
+  // all the unknown spaces are free
+  uint8_t *data = map_image.data;
+  for (size_t i = 0; i < map_image.total(); i++, data++)
+  {
+    if (*data == 255)
+    {
+      *data = 0;
+    }
+  }
+
+  tf::StampedTransform map_T_r0; 
+  try
+  {
+    
+    tf_listener_.lookupTransform(map_frame_, base_frame_,
+                                ros::Time(0), map_T_r0);
+  }
+  catch (tf::TransformException ex)
+  {
+    ROS_ERROR("TF error %s", ex.what());
+    return;
+    // ros::Duration(1.0).sleep();
+  }
+
+  cv::Point robot_image_coordinates(
+    (map_T_r0.getOrigin().x() - (int)map_msg.info.origin.position.x) / map_msg.info.resolution,
+    (map_T_r0.getOrigin().y() - (int)map_msg.info.origin.position.y) / map_msg.info.resolution
+  );
+  
+  cv::Point prediction_image_coordinates(
+    (prediction_global_.x - (int)map_msg.info.origin.position.x) / map_msg.info.resolution,
+    (prediction_global_.y - (int)map_msg.info.origin.position.y) / map_msg.info.resolution
+  );
+
+  // visualize the robot and the person
+  cv::circle(map_image, robot_image_coordinates, 8, 255);
+  cv::circle(map_image, prediction_image_coordinates, 5, 255);
+
+  cv::LineIterator line_iterator(map_image, robot_image_coordinates, prediction_image_coordinates);
+  cv::LineIterator it = line_iterator;
+  
+  for(int i = 0; i < line_iterator.count; i++, ++it)
+  {
+    cv::Point point_coordinates = it.pos();
+    map_image.at<uint8_t>(point_coordinates) = 127;
+  }
+  
+  cv_bridge::CvImage cv_ptr;
+  cv_ptr.image = map_image;
+  cv_ptr.encoding = "mono8";
+  cv_ptr.header = map_msg.header;
+
+  map_image_pub_.publish(cv_ptr.toImageMsg());  
+}
 
 
 void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& msg)
@@ -233,6 +296,18 @@ void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& 
   //   // blob not updated, so return
   //   return;
   // }
+
+  nav_msgs::GetMap get_map_srv;
+  
+  if (map_service_client_.call(get_map_srv))
+  {
+    nav_msgs::OccupancyGrid &map_msg(get_map_srv.response.map);
+    mapCallback(map_msg); 
+  }
+  else
+  {
+    ROS_ERROR("get_map service call failed!!!");
+  }
 
   human_relative_pose = cv::Point3f(current_relative_pose_.transform.translation.x, current_relative_pose_.transform.translation.y, 0);
 
@@ -484,6 +559,9 @@ void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& 
     cv::Point3f prediction_global(prediction_x, prediction_y, 0);
     cv::Point3f prediction_local = transformPoint(r0_T_map, prediction_global);
 
+    prediction_local_ = prediction_local;
+    prediction_global_ = prediction_global;
+
     static double nav_goal_last_sent = 0;
     if (
       // true
@@ -512,8 +590,6 @@ void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& 
     else // if (!isDeadManActive)
     {
       // cancel anything that's going on
-      ROS_INFO("Cancelling move_base goals");
-      
       geometry_msgs::Twist cmd_vel;
       cmd_vel.linear.x = 0;
       cmd_vel.linear.z = 1; // make it fly :)

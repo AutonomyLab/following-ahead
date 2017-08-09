@@ -85,7 +85,6 @@ public:
 		// double centerPointY = (blobMsg->detections[0].top + blobMsg->detections[0].bottom) / 2.0;
 
 		double degree = getBlobBearing(centerPointX, maxblobx);
-		ROS_INFO("BEARING: %f", degree * 180.0 / M_PI);
 		double blobStartAngle = getBlobBearing( blobMsg->detections[0].left, maxblobx);
     	double blobEndAngle = getBlobBearing( blobMsg->detections[0].right, maxblobx);
 		// the start of laser is at the back of robot
@@ -115,8 +114,6 @@ public:
 		  relative_x_est *=-1;
 		  relative_y_est *= -1;
 		}
-
-		ROS_INFO("Relative estimate: %f, %f", relative_x_est, relative_y_est);
 
 		cv::Mat relative_est(3, 1, CV_32F);
 		relative_est.at<float>(0, 0) = relative_x_est;

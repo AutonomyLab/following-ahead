@@ -16,6 +16,12 @@
 #include <geometry_msgs/TransformStamped.h>
 #include <nav_msgs/Odometry.h>
 #include <sensor_msgs/PointCloud.h>
+#include <nav_msgs/OccupancyGrid.h>
+#include <nav_msgs/GetMap.h>
+
+#include <image_transport/image_transport.h>
+#include <cv_bridge/cv_bridge.h>
+#include <sensor_msgs/image_encodings.h>
 
 #include <move_base_msgs/MoveBaseAction.h>
 #include <actionlib/client/simple_action_client.h>
@@ -72,6 +78,15 @@ private:
     std::string odom_frame_;
     std::string map_frame_;
     std::string person_frame_;
+
+    ros::ServiceClient map_service_client_;
+
+    // temporary stuffs
+    image_transport::ImageTransport image_transport_;
+    image_transport::Publisher map_image_pub_;
+
+    cv::Point3f prediction_local_;
+    cv::Point3f prediction_global_;
     
 public:
     Robot(  ros::NodeHandle n, 
@@ -86,6 +101,8 @@ public:
     cv::Point3f getHumanPose();
     void myBlobUpdate (const boost::shared_ptr<const geometry_msgs::TransformStamped>& msg);
     int relativePoseCallback();
+    void mapCallback(nav_msgs::OccupancyGrid &map_msg);
+
     int kiniectPoseCallback();
     int calculateDistination(cv::Point3f&);
     int publishCmdVel(cv::Point3f destination);
