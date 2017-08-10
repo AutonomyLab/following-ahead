@@ -30,6 +30,7 @@
 #include "person_kalman.hpp"
 #include "ParticleFilter.hpp"
 #include "PredictionParticleFilter.hpp"
+#include "linear_motion_model.hpp"
 
 class Robot
 {
@@ -73,6 +74,7 @@ private:
 
     nav_msgs::Odometry current_odometry_;
     geometry_msgs::TransformStamped current_relative_pose_;
+    tf::Transform absolute_tf_pose_human_;
 
     std::string base_frame_;
     std::string odom_frame_;
@@ -87,7 +89,7 @@ private:
 
     cv::Point3f prediction_local_;
     cv::Point3f prediction_global_;
-    
+    LinearMotionModel person_motion_model_;
 public:
     Robot(  ros::NodeHandle n, 
             std::string base_frame, std::string odom_frame, 

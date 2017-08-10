@@ -3,6 +3,25 @@
 #include <cfloat>
 
 
+cv::Mat theta2RotationMatrix(float theta)
+{
+  cv::Mat rotation_matrix = cv::Mat(2, 2, CV_32F);
+  rotation_matrix.at<float>(0, 0) = cos(theta);
+  rotation_matrix.at<float>(0, 1) = -sin(theta);
+  rotation_matrix.at<float>(1, 0) = -rotation_matrix.at<float>(0, 1);
+  rotation_matrix.at<float>(1, 1) = rotation_matrix.at<float>(0, 0);
+
+  return rotation_matrix;
+}
+
+float rotationMatrix2Theta(cv::Mat rotation_matrix)
+{
+  return atan2(
+    rotation_matrix.at<float>(1, 0), 
+    rotation_matrix.at<float>(1, 1)
+  );
+}
+
 cv::Mat xytheta2TransformationMatrix(cv::Mat xytheta)
 {
   float x = xytheta.at<float>(0, 0);

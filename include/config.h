@@ -96,7 +96,9 @@
 
 // probability of occupancy beyond which we consider it to be obstacle
 #define OCCUPANCY_THRESHOLD 70
-
+#define OBSTACLE_RAYCASTING_PERTURBATION 10
+// distance to maintain from the obstacles (for the motion model)
+#define OBSTACLE_CLEARANCE_DISTANCE 0.15
 #define FOV 180.0
 
 static const float g_fov = FOV*M_PI/180.0;

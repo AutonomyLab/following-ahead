@@ -4,6 +4,8 @@
 #include <tf/transform_datatypes.h>
 #include <tf/transform_listener.h>
 
+cv::Mat theta2RotationMatrix(float theta);
+float rotationMatrix2Theta(cv::Mat rotation_matrix);
 
 cv::Mat xytheta2TransformationMatrix(cv::Mat xytheta);
 cv::Mat xytheta2TransformationMatrix(cv::Point3f xytheta);

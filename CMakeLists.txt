@@ -149,6 +149,7 @@ add_library(${PROJECT_NAME}
   src/ParticleFilter.cpp
   src/PredictionParticleFilter.cpp
   src/person_kalman.cpp
+  src/linear_motion_model.cpp
 )
 
 ## Add cmake target dependencies of the library
@@ -166,7 +167,7 @@ target_link_libraries(${PROJECT_NAME}
 ## The recommended prefix ensures that target names across packages don't collide
 add_executable(person_follower_node src/person_follower_node.cpp)
 add_executable(simulation_interface_node src/simulation_interface_node.cpp)
-
+add_executable(linear_motion_model_test src/linear_motion_model_test.cpp)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -178,6 +179,7 @@ add_executable(simulation_interface_node src/simulation_interface_node.cpp)
 ## same as for the library above
 add_dependencies(person_follower_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 add_dependencies(simulation_interface_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+add_dependencies(linear_motion_model_test ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 ## Specify libraries to link a library or executable target against
 target_link_libraries(person_follower_node
@@ -188,6 +190,13 @@ target_link_libraries(person_follower_node
 )
 
 target_link_libraries(simulation_interface_node
+  ${catkin_LIBRARIES}
+  #${OpenCV_LIBRARIES}
+  ${OPENCV_LIB}
+  ${PROJECT_NAME}
+)
+
+target_link_libraries(linear_motion_model_test
   ${catkin_LIBRARIES}
   #${OpenCV_LIBRARIES}
   ${OPENCV_LIB}
