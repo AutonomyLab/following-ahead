@@ -15,6 +15,8 @@
 #include <costmap_2d/costmap_2d_ros.h>
 #include "utils.hpp"
 
+#include <set>
+
 cv::Point3f Robot::getRobotPose()
 {
 	return robot_poses->getFilter();
@@ -237,6 +239,14 @@ void Robot::mapCallback(nav_msgs::OccupancyGrid &map_msg)
     }
   }
 
+  // ------------------ Remove these if thresholding is not needed ------------------ //
+  cv::Mat map_image_thresholded;
+  cv::threshold(map_image, map_image_thresholded, OCCUPANCY_THRESHOLD, 255, CV_THRESH_BINARY);
+  map_image = map_image_thresholded;
+  // ------------------ Remove these if thresholding is not needed ------------------ //
+
+  // TODO: fill holes
+
   tf::StampedTransform map_T_r0; 
   try
   {
@@ -261,19 +271,105 @@ void Robot::mapCallback(nav_msgs::OccupancyGrid &map_msg)
     (prediction_global_.y - (int)map_msg.info.origin.position.y) / map_msg.info.resolution
   );
 
+  std::vector<cv::Point> predictions;
+  
+  for (size_t i = 0; i < 10; i++)
+  {
+    for (size_t j = 0; j < 10; j++)
+    {
+      predictions.push_back(cv::Point(
+        prediction_image_coordinates.x + i,
+        prediction_image_coordinates.y + j
+      ));
+    }
+  }
+
+  std::vector<cv::Point> obstacles;
+  bool is_obstacle = false;
+
+  for (size_t prediction_idx = 0; prediction_idx < predictions.size(); prediction_idx++)
+  {
+    cv::LineIterator line_iterator(map_image, robot_image_coordinates, predictions[prediction_idx]);
+    cv::LineIterator it = line_iterator;
+    
+    cv::Point obstacle_coordinates;
+    for(int i = 0; i < line_iterator.count; i++, ++it)
+    {
+      // TODO: increase the thickness of the line
+
+      if (map_image.at<uint8_t>(it.pos()) == 255)
+      {
+        // there is an obstacle
+        // cv::circle(map_image, it.pos(), 3, 200);
+        is_obstacle = true;
+        obstacles.push_back(it.pos());
+        break;
+      }
+      map_image.at<uint8_t>(it.pos()) = 127;
+    }
+  }
+
+  if (is_obstacle)
+  {
+    cv::Mat obstacle_image = cv::Mat::zeros(map_image.rows, map_image.cols, CV_8UC1);
+    
+    size_t obstacle_count = 0;
+    for (size_t obstacle_idx =0; obstacle_idx < obstacles.size(); obstacle_idx++)
+    {
+      if (obstacle_image.at<uint8_t>(obstacles[obstacle_idx]) != 255)
+      {
+        obstacle_count++;
+        obstacle_image.at<uint8_t>(obstacles[obstacle_idx]) = 255;
+      } 
+    }
+    // map_image = obstacle_image.clone();
+    
+    // cv::Mat mask = cv::Mat::zeros(map_image.rows + 2, map_image.cols + 2, CV_8UC1); 
+    // cv::Rect bounding_box;
+    // cv::floodFill(
+    //   map_image, mask, obstacle_coordinates, 
+    //   255, &bounding_box, 
+    //   cv::Scalar(), cv::Scalar(),  4 | ((int)255 << 8) | cv::FLOODFILL_MASK_ONLY
+    // );
+
+    // std::cout << "bounding box: \n" << bounding_box << std::endl; 
+
+    // the mask is padded by two pixels
+    // map_image = mask.rowRange(1, mask.rows-1).colRange(1, mask.cols-1);
+
+    std::vector<cv::Vec2f> lines;
+    cv::HoughLines(obstacle_image, lines, 2, CV_PI/180.0*2.0, obstacle_count*0.9, 0, 0);
+
+    // vector<Vec4i> lines;
+    // HoughLinesP(obstacle_image, lines, 1, CV_PI/180, 15, 3, 1 );
+
+    if (lines.size())
+    {
+      for (size_t line_idx = 0; line_idx < 1/*lines.size()*/; line_idx++)
+      {
+        std::cout << "Line: " << lines[line_idx] << std::endl;
+        
+        float rho = lines[line_idx][0];
+        float theta = lines[line_idx][1];
+
+        cv::Point pt1, pt2;
+        double a = cos(theta), b = sin(theta);
+        double x0 = a*rho, y0 = b*rho;
+        pt1.x = cvRound(x0 + 1000*(-b)); //??
+        pt1.y = cvRound(y0 + 1000*(a)); //??
+        pt2.x = cvRound(x0 - 1000*(-b)); //??
+        pt2.y = cvRound(y0 - 1000*(a)); //??
+        cv::line(map_image, pt1, pt2, cv::Scalar(150), 1, CV_AA);
+      }
+    }
+  }
+
   // visualize the robot and the person
   cv::circle(map_image, robot_image_coordinates, 8, 255);
   cv::circle(map_image, prediction_image_coordinates, 5, 255);
 
-  cv::LineIterator line_iterator(map_image, robot_image_coordinates, prediction_image_coordinates);
-  cv::LineIterator it = line_iterator;
   
-  for(int i = 0; i < line_iterator.count; i++, ++it)
-  {
-    cv::Point point_coordinates = it.pos();
-    map_image.at<uint8_t>(point_coordinates) = 127;
-  }
-  
+
   cv_bridge::CvImage cv_ptr;
   cv_ptr.image = map_image;
   cv_ptr.encoding = "mono8";

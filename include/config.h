@@ -94,6 +94,9 @@
 
 #define STDDEV_EPSILON 0.0001
 
+// probability of occupancy beyond which we consider it to be obstacle
+#define OCCUPANCY_THRESHOLD 70
+
 #define FOV 180.0
 
 static const float g_fov = FOV*M_PI/180.0;
