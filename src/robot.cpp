@@ -229,11 +229,12 @@ int Robot::publishCmdVel(cv::Point3f destination)
 
 void Robot::mapCallback(nav_msgs::OccupancyGrid &map_msg)
 {
-  cv::Mat map_image(map_msg.info.width, map_msg.info.height, CV_8UC1, (void*)map_msg.data.data());
+  map_image_ = cv::Mat(map_msg.info.width, map_msg.info.height, CV_8UC1, (void*)map_msg.data.data());
+  map_occupancy_grid_ = map_msg;
 
   // all the unknown spaces are free
-  uint8_t *data = map_image.data;
-  for (size_t i = 0; i < map_image.total(); i++, data++)
+  uint8_t *data = map_image_.data;
+  for (size_t i = 0; i < map_image_.total(); i++, data++)
   {
     if (*data == 255)
     {
@@ -243,29 +244,33 @@ void Robot::mapCallback(nav_msgs::OccupancyGrid &map_msg)
 
   // ------------------ Remove these if thresholding is not needed ------------------ //
   cv::Mat map_image_thresholded;
-  cv::threshold(map_image, map_image_thresholded, OCCUPANCY_THRESHOLD, 255, CV_THRESH_BINARY);
-  map_image = map_image_thresholded;
+  cv::threshold(map_image_, map_image_thresholded, OCCUPANCY_THRESHOLD, 255, CV_THRESH_BINARY);
+  map_image_ = map_image_thresholded;
   // ------------------ Remove these if thresholding is not needed ------------------ //
+}
 
+cv::Point3f Robot::updatePrediction()
+{
   // TODO: fill holes
+  // TODO: account for map orientation
+
   cv::Point person_image_coordinates(
-    (absolute_tf_pose_human_.getOrigin().x() - (int)map_msg.info.origin.position.x) / map_msg.info.resolution,
-    (absolute_tf_pose_human_.getOrigin().y() - (int)map_msg.info.origin.position.y) / map_msg.info.resolution
+    (absolute_tf_pose_human_.getOrigin().x() - (int)map_occupancy_grid_.info.origin.position.x) / map_occupancy_grid_.info.resolution,
+    (absolute_tf_pose_human_.getOrigin().y() - (int)map_occupancy_grid_.info.origin.position.y) / map_occupancy_grid_.info.resolution
   );
   
   cv::Point prediction_image_coordinates(
-    (prediction_global_.x - (int)map_msg.info.origin.position.x) / map_msg.info.resolution,
-    (prediction_global_.y - (int)map_msg.info.origin.position.y) / map_msg.info.resolution
+    (prediction_global_.x - (int)map_occupancy_grid_.info.origin.position.x) / map_occupancy_grid_.info.resolution,
+    (prediction_global_.y - (int)map_occupancy_grid_.info.origin.position.y) / map_occupancy_grid_.info.resolution
   );
 
   cv::Point new_person_image_coordinates, new_prediction_image_coordinates;
   cv::Mat debug_map;
-  float remaining_distance;
   
-  person_motion_model_.updateWayPoint(   
-    map_image, map_msg.info.resolution,
-    person_image_coordinates, prediction_image_coordinates, 0.0, 
-    new_person_image_coordinates, new_prediction_image_coordinates, remaining_distance,
+  person_motion_model_.updatePrediction(   
+    map_image_, map_occupancy_grid_.info.resolution,
+    person_image_coordinates, prediction_image_coordinates, PREDICTION_LOOKAHEAD_DISTANCE, 
+    new_person_image_coordinates, new_prediction_image_coordinates,
     debug_map
   );
 
@@ -275,11 +280,22 @@ void Robot::mapCallback(nav_msgs::OccupancyGrid &map_msg)
   cv_bridge::CvImage cv_ptr;
   cv_ptr.image = debug_map_flipped;
   cv_ptr.encoding = "mono8";
-  cv_ptr.header = map_msg.header;
+  cv_ptr.header = map_occupancy_grid_.header;
 
-  map_image_pub_.publish(cv_ptr.toImageMsg());  
+  map_image_pub_.publish(cv_ptr.toImageMsg()); 
+
+  // account for map orientation
+  float orientation = atan2(
+    new_prediction_image_coordinates.y - new_person_image_coordinates.y,
+    new_prediction_image_coordinates.x - new_person_image_coordinates.x
+  );
+
+  return cv::Point3f(
+    new_prediction_image_coordinates.x * map_occupancy_grid_.info.resolution + (int)map_occupancy_grid_.info.origin.position.x,
+    new_prediction_image_coordinates.y * map_occupancy_grid_.info.resolution + (int)map_occupancy_grid_.info.origin.position.y,
+    orientation
+  );
 }
-
 
 void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& msg)
 {
@@ -485,6 +501,7 @@ void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& 
   prediction_kalman_transform.setRotation(q);
 
   tf_broadcaster_.sendTransform(prediction_kalman_transform);
+
   cv::Mat person_error_covariance = person_kalman_->getStateErrorCovariance();
   float velocity_stddev = sqrt(person_error_covariance.at<float>(VEL_IDX, VEL_IDX));
   float theta_stddev = sqrt(person_error_covariance.at<float>(THETA_IDX, THETA_IDX));
@@ -560,6 +577,23 @@ void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& 
     prediction_local_ = prediction_local;
     prediction_global_ = prediction_global;
 
+    if (map_image_.total())
+    {
+      prediction_global_ = updatePrediction();
+
+      tf::StampedTransform prediction_updated;
+      prediction_updated.child_frame_id_ = "updated_prediction"; // source
+      prediction_updated.frame_id_ = map_frame_; // target
+      prediction_updated.stamp_ = ros::Time::now();
+
+      prediction_updated.setOrigin(tf::Vector3(prediction_global_.x, prediction_global_.y, 0));
+      tf::Quaternion q;
+      q.setRPY(0, 0, prediction_global_.z);
+      prediction_updated.setRotation(q);
+
+      tf_broadcaster_.sendTransform(prediction_updated);
+    }
+
     static double nav_goal_last_sent = 0;
     if (
       // true
@@ -573,8 +607,8 @@ void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& 
 
         nav_goal_msg.target_pose.header.stamp = ros::Time::now();
         nav_goal_msg.target_pose.header.frame_id = map_frame_;
-        nav_goal_msg.target_pose.pose.position.x = prediction_x;
-        nav_goal_msg.target_pose.pose.position.y = prediction_y;
+        nav_goal_msg.target_pose.pose.position.x = prediction_global_.x;
+        nav_goal_msg.target_pose.pose.position.y = prediction_global_.y;
         nav_goal_msg.target_pose.pose.position.z = 0;
         nav_goal_msg.target_pose.pose.orientation.x = q.x();
         nav_goal_msg.target_pose.pose.orientation.y = q.y();

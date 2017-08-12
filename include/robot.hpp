@@ -90,6 +90,9 @@ private:
     cv::Point3f prediction_local_;
     cv::Point3f prediction_global_;
     LinearMotionModel person_motion_model_;
+
+    cv::Mat map_image_;
+    nav_msgs::OccupancyGrid map_occupancy_grid_;
 public:
     Robot(  ros::NodeHandle n, 
             std::string base_frame, std::string odom_frame, 
@@ -104,6 +107,7 @@ public:
     void myBlobUpdate (const boost::shared_ptr<const geometry_msgs::TransformStamped>& msg);
     int relativePoseCallback();
     void mapCallback(nav_msgs::OccupancyGrid &map_msg);
+    cv::Point3f updatePrediction();
 
     int kiniectPoseCallback();
     int calculateDistination(cv::Point3f&);

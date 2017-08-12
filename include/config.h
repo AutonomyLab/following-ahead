@@ -84,7 +84,7 @@
 #define ROBOT_VELOCITY_VARIANCE_SCALING 0.5
 
 // lookahead distance (m) for prediction
-#define PREDICTION_LOOKAHEAD_DISTANCE 2.0
+#define PREDICTION_LOOKAHEAD_DISTANCE 3.0
 
 // maximum orientation change between two iterations (used for calculating probability of the measurement)
 #define MAX_DEL_THETA 0.17453292519943295 // 10 degrees
@@ -96,9 +96,12 @@
 
 // probability of occupancy beyond which we consider it to be obstacle
 #define OCCUPANCY_THRESHOLD 70
-#define OBSTACLE_RAYCASTING_PERTURBATION 10
+#define OBSTACLE_RAYCASTING_PERTURBATION 5
 // distance to maintain from the obstacles (for the motion model)
-#define OBSTACLE_CLEARANCE_DISTANCE 0.15
+#define OBSTACLE_CLEARANCE_DISTANCE 0.6
+// the normalized cost difference below this will count as a draw
+#define NORMALIZED_COST_THRESHOLD 0.1
+
 #define FOV 180.0
 
 static const float g_fov = FOV*M_PI/180.0;

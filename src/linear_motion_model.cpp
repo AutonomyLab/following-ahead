@@ -7,29 +7,119 @@
 #include "config.h"
 #include "utils.hpp"
 
+LinearMotionModel::LinearMotionModel(): is_first_(true)
+{
+
+}
+
+int LinearMotionModel::updatePrediction(  cv::Mat &map, float map_resolution,
+                                          cv::Point object_point, cv::Point destination_point, float distance, 
+                                          cv::Point &object_point_out, cv::Point &destination_point_out,
+                                          cv::Mat &debug_map
+                                        )
+{
+  current_object_point_ = object_point;
+  current_destination_point_ = destination_point;
+
+  if (is_first_)
+  {
+    // TODO: check if it's a good idea
+    previous_destination_point_ = current_destination_point_;
+    is_first_ = false;
+  }
+
+  debug_map = map.clone();
+  
+  float remaining_distance = distance;
+  float new_distance = distance;
+  size_t loop_count = 0;
+
+  int status = 0;
+  while (remaining_distance > 0)
+  {
+    ROS_INFO("Prediction iter: %d", loop_count++);
+    
+    if (
+          updateWayPoint(   
+            map, map_resolution,
+            object_point, destination_point, remaining_distance,
+            object_point_out,  destination_point_out, new_distance,
+            debug_map
+          )
+      )
+    {
+      status = 1;
+      break;
+    }
+    ROS_INFO("update prediction distance:%f", new_distance);
+    
+    remaining_distance = new_distance;
+    object_point = object_point_out;
+    destination_point = destination_point_out;
+  }
+  previous_destination_point_ = destination_point_out;
+
+  cv::circle(debug_map, object_point, 8, 255);
+  cv::circle(debug_map, destination_point, 5, 255);
+  
+  return status;
+}
+
 int LinearMotionModel::updateWayPoint(  cv::Mat &map, float map_resolution,
                                         cv::Point object_point, cv::Point destination_point, float distance,
                                         cv::Point &object_point_out, cv::Point &destination_point_out, float &remaining_distance_out,
                                         cv::Mat &debug_map
                                       )
 {
-  debug_map = map.clone();
-	
+  // default case: no obstacles, the point are all right
+  object_point_out = object_point;
+  destination_point_out = destination_point;
+  remaining_distance_out = 0;
+
+  // visualize the direction of the object
+  cv::line(debug_map, object_point, destination_point, cv::Scalar(100), 1, CV_AA);
+
+  cv::Point2f RP_unit_vector(
+    destination_point.x - object_point.x,
+    destination_point.y - object_point.y
+  );
+  RP_unit_vector = RP_unit_vector / cv::norm(RP_unit_vector);
+
+  cv::Point2f normal_unit_vector(
+    RP_unit_vector.y, -RP_unit_vector.x
+  );
+
+  cv::Point2f ray_endpoint1, ray_endpoint2;
+  ray_endpoint1 = cv::Point2f(destination_point.x, destination_point.y) + OBSTACLE_RAYCASTING_PERTURBATION * normal_unit_vector;
+  ray_endpoint2 = cv::Point2f(destination_point.x, destination_point.y) - OBSTACLE_RAYCASTING_PERTURBATION * normal_unit_vector;
+
+  cv::line(
+    debug_map, 
+    cv::Point(round(ray_endpoint1.x), round(ray_endpoint1.y)),
+    cv::Point(round(ray_endpoint2.x), round(ray_endpoint2.y)), 
+    cv::Scalar(150), 1, CV_AA
+  );
+
   // add perturbations to the destination points to get a number of rays
   std::vector<cv::Point> predictions;
-  for (int i = -OBSTACLE_RAYCASTING_PERTURBATION; i <= OBSTACLE_RAYCASTING_PERTURBATION; i++)
+  cv::LineIterator prediction_line_iterator(
+    map, 
+    cv::Point(round(ray_endpoint1.x), round(ray_endpoint1.y)),
+    cv::Point(round(ray_endpoint2.x), round(ray_endpoint2.y))
+  );
+
+  cv::LineIterator it = prediction_line_iterator;
+  for (size_t i = 0; i < prediction_line_iterator.count; i++, it++)
   {
-    for (int j = -OBSTACLE_RAYCASTING_PERTURBATION; j <= OBSTACLE_RAYCASTING_PERTURBATION; j++)
-    {
-      int x = destination_point.x + i;
-      int y = destination_point.y + j;
-      x = std::max( std::min(x, map.cols-1), 0);
-      y = std::max( std::min(y, map.rows-1), 0);
-      predictions.push_back(
-        cv::Point(x, y)
-      );
-    }
+    int x = it.pos().x;
+    int y = it.pos().y;
+    x = std::max( std::min(x, map.cols-1), 0);
+    y = std::max( std::min(y, map.rows-1), 0);
+    predictions.push_back(
+      cv::Point(x, y)
+    );
   }
+  
 
   std::vector<cv::Point> obstacles;
   bool is_obstacle = false;
@@ -51,7 +141,7 @@ int LinearMotionModel::updateWayPoint(  cv::Mat &map, float map_resolution,
         obstacles.push_back(it.pos());
         break;
       }
-      debug_map.at<uint8_t>(it.pos()) = 127;
+      // debug_map.at<uint8_t>(it.pos()) = 127;
     }
   }
 
@@ -107,75 +197,244 @@ int LinearMotionModel::updateWayPoint(  cv::Mat &map, float map_resolution,
         pt1.y = cvRound(y0 + 1000*(a)); //??
         pt2.x = cvRound(x0 - 1000*(-b)); //??
         pt2.y = cvRound(y0 - 1000*(a)); //??
-        cv::line(debug_map, pt1, pt2, cv::Scalar(150), 1, CV_AA);
+        cv::line(debug_map, pt1, pt2, cv::Scalar(50), 1, CV_AA);
 
         // find the new waypoint of the person
-        // angle of the vector RP (Robot to Prediction)
-        float RP_theta = atan2(
-          destination_point.y - object_point.y,
-          destination_point.x - object_point.x
-        );
-
-        float clearance = OBSTACLE_CLEARANCE_DISTANCE / map_resolution;
-        object_point_out.x = round(obstacles[0].x - clearance * cos(RP_theta));
-        object_point_out.y = round(obstacles[0].y - clearance * sin(RP_theta));
-        object_point_out.x = std::max( std::min(object_point_out.x, map.cols-1), 0);
-        object_point_out.y = std::max( std::min(object_point_out.y, map.rows-1), 0);
-
-        // find the waypoint of prediction
-        // angle of the obstacle line
-        float ol_theta = atan2(
-          -cos(theta),
-          sin(theta)
-        );
-        ol_theta = chooseObstacleDirection(RP_theta, ol_theta);
-
-        // move remaining distance away from the robot waypoint towards the obstacle direction (wall following)
-        // TODO: CALCULATE THE REMAINING DISTANCE!!!
         
-        destination_point_out.x = object_point_out.x + 100 * cos(ol_theta);
-        destination_point_out.y = object_point_out.y + 100 * sin(ol_theta); 
-        destination_point_out.x = std::max( std::min(destination_point_out.x, map.cols-1), 0);
-        destination_point_out.y = std::max( std::min(destination_point_out.y, map.rows-1), 0);
+        // find the waypoint of prediction
+        float ol_theta = chooseObstacleDirection(
+          object_point, 
+          destination_point,
+          obstacles[0],
+          map,
+          map_resolution,
+          theta,
+          object_point_out,
+          destination_point_out,
+          distance, 
+          remaining_distance_out
+        );
 
         // visualize the new waypoints
-        cv::line(debug_map, object_point_out, destination_point_out, cv::Scalar(150), 2, CV_AA);
+        cv::line(debug_map, object_point_out, destination_point_out, cv::Scalar(150), 1, CV_AA);
       }
     }
     else
     {
       // no line found even if there are obstacles
-      // TODO: deal with this more gracefully
       ROS_WARN("Could not find obstacle line, consider changing hough threshold");
+
+      // find the new waypoint of the destination, which is just clearance distance way from obstacle
+      // angle of the vector RP (Robot to Prediction)
+      float RP_theta = atan2(
+        destination_point.y - object_point.y,
+        destination_point.x - object_point.x
+      );
+      float clearance = OBSTACLE_CLEARANCE_DISTANCE / map_resolution;
+      destination_point_out.x = round(obstacles[0].x - clearance * cos(RP_theta));
+      destination_point_out.y = round(obstacles[0].y - clearance * sin(RP_theta));
+      destination_point_out.x = std::max( std::min(destination_point_out.x, map.cols-1), 0);
+      destination_point_out.y = std::max( std::min(destination_point_out.y, map.rows-1), 0);
+
+      object_point_out = object_point;
+      remaining_distance_out = 0;  
       return 1;  
     }
   }
-
+  
   // visualize the robot and the person
-  cv::circle(debug_map, object_point, 8, 255);
-  cv::circle(debug_map, destination_point, 5, 255);
+  // cv::circle(debug_map, object_point, 8, 255);
+  // cv::circle(debug_map, destination_point, 5, 255);
 
   return 0;
 
 }
 
-float LinearMotionModel::chooseObstacleDirection(float RP_theta, float ol_theta)
+float LinearMotionModel::chooseObstacleDirection(
+                                                  cv::Point object_point, 
+                                                  cv::Point destination_point,
+                                                  cv::Point obstacle_point,
+                                                  cv::Mat &map,
+                                                  float map_resolution,
+                                                  float obstacle_orientation,
+                                                  cv::Point &object_point_out,
+                                                  cv::Point &destination_point_out,
+                                                  float distance,
+                                                  float &remaining_distance_out
+                                                )
 {
-  float ol_theta2 = oppositeAngle(ol_theta);
+  cv::Point2f object_vector(
+    destination_point.x - object_point.x,
+    destination_point.y - object_point.y
+  );
+  object_vector /= cv::norm(object_vector);
+
+  float RP_theta = atan2(
+    object_vector.y,
+    object_vector.x
+  );
+
+  // two angles of the obstacle line
+  float ol_theta[2];
+  ol_theta[0] = atan2(
+    -cos(obstacle_orientation),
+    sin(obstacle_orientation)
+  );
+  ol_theta[1] = oppositeAngle(ol_theta[0]);
+
+  // vector normal to the obstacle (needed for backing off)
+  cv::Point2f obstacle_normal_vectors[2];
+  obstacle_normal_vectors[0] = cv::Point2f(-sin(ol_theta[0]), cos(ol_theta[0]));
+  obstacle_normal_vectors[1] = cv::Point2f(sin(ol_theta[0]), -cos(ol_theta[0]));
+
+  float object2obstacle_normal_angle[2] = {
+    acos(obstacle_normal_vectors[0].dot(object_vector)),
+    acos(obstacle_normal_vectors[1].dot(object_vector))
+  };
+
+  float obstacle_normal_angles[2] = {
+    atan2(obstacle_normal_vectors[0].y, obstacle_normal_vectors[0].x),
+    atan2(obstacle_normal_vectors[1].y, obstacle_normal_vectors[1].x)
+  };
+
+  // choose max cuz you don't want to go through the obstacle
+  float backing_off_angle = (object2obstacle_normal_angle[0] > object2obstacle_normal_angle[1]) ?
+                            obstacle_normal_angles[0] : obstacle_normal_angles[1];
+
+  float clearance = OBSTACLE_CLEARANCE_DISTANCE / map_resolution;
+  object_point_out.x = round(obstacle_point.x + clearance * cos(backing_off_angle));
+  object_point_out.y = round(obstacle_point.y + clearance * sin(backing_off_angle));
+  object_point_out.x = std::max( std::min(object_point_out.x, map.cols-1), 0);
+  object_point_out.y = std::max( std::min(object_point_out.y, map.rows-1), 0);
 
   cv::Mat R_w_rp = theta2RotationMatrix(RP_theta);
-  cv::Mat R_w_vl1 = theta2RotationMatrix(ol_theta);
-  cv::Mat R_w_vl2 = theta2RotationMatrix(ol_theta2);
+  cv::Mat R_w_vl1 = theta2RotationMatrix(ol_theta[0]);
+  cv::Mat R_w_vl2 = theta2RotationMatrix(ol_theta[1]);
 
   cv::Mat R_rp_vl1 = R_w_rp.t() * R_w_vl1;
   cv::Mat R_rp_vl2 = R_w_rp.t() * R_w_vl2;
 
-  // angles between the vectors RP and OL
-  float angle1 = rotationMatrix2Theta(R_rp_vl1);
-  float angle2 = rotationMatrix2Theta(R_rp_vl2);
+  // angles between the vectors RP(object direction) and OL (Obstacle line)
+  float angle_object_wall[2];
+  angle_object_wall[0] = rotationMatrix2Theta(R_rp_vl1);
+  angle_object_wall[1] = rotationMatrix2Theta(R_rp_vl2);
 
-  return (abs(angle2) < abs(angle1)) ? ol_theta2 : ol_theta;
+  // move remaining distance away from the robot waypoint towards the obstacle direction (wall following)
+  float covered_distance_pixels = sqrt(
+    pow(object_point_out.x - object_point.x, 2) + pow(object_point_out.y - object_point.y, 2)
+  );
 
+  if (covered_distance_pixels == 0)
+  {
+    object_point_out = object_point;
+    return 1;
+  }
+
+  float covered_distance_meters = covered_distance_pixels * map_resolution;
+  // output
+  remaining_distance_out = distance - covered_distance_meters;
+  
+  if (remaining_distance_out <= 0)
+  {
+    object_point_out = object_point;
+    remaining_distance_out = 0;
+    return 1;
+  }
+
+  float remaining_distance_pixels = remaining_distance_out / map_resolution;
+  
+  ROS_INFO(
+    "covered_distance_pixels: %f, covered_distance_meters: %f, remaining_distance_out: %f, remaining_distance_pixels",
+    covered_distance_pixels, covered_distance_meters, remaining_distance_out, remaining_distance_pixels
+  );
+
+  cv::Point destination_points[2];
+
+  for (size_t i = 0; i < 2; i++)
+  {
+    destination_points[i].x = round(object_point_out.x + remaining_distance_pixels * cos(ol_theta[i]));
+    destination_points[i].y = round(object_point_out.y + remaining_distance_pixels * sin(ol_theta[i])); 
+    destination_points[i].x = std::max( std::min(destination_points[i].x, map.cols-1), 0);
+    destination_points[i].y = std::max( std::min(destination_points[i].y, map.rows-1), 0);
+  }
+
+  float object2destinations_distance[2];
+  for (size_t i = 0; i < 2; i++)
+  {
+    object2destinations_distance[i] = sqrt(
+      pow(destination_points[i].x - current_object_point_.x, 2) +
+      pow(destination_points[i].y - current_object_point_.y, 2)
+    ) * map_resolution;
+  }
+
+  float previous2currentdestinations_distance[2];
+  for (size_t i = 0; i < 2; i++)
+  {
+    previous2currentdestinations_distance[i] = sqrt(
+      pow(destination_points[i].x - previous_destination_point_.x, 2) +
+      pow(destination_points[i].y - previous_destination_point_.y, 2)
+    ) * map_resolution;
+  }
+
+  // all three costs for the two directions
+  float costs[2][3];
+  for (size_t i = 0; i < 2; i++)
+  {
+    costs[i][0] = fabs(angle_object_wall[i]) / M_PI;
+    costs[i][1] = previous2currentdestinations_distance[i] / PREDICTION_LOOKAHEAD_DISTANCE;
+    costs[i][2] = 1.0/(1.0 + (object2destinations_distance[i] / PREDICTION_LOOKAHEAD_DISTANCE)) * 2.0;
+  }
+  
+  // winners for the three costs
+  int cost_winners[3];
+  for (size_t j = 0; j < 3; j++)
+  if ( fabs(costs[0][j] - costs[1][j]) < NORMALIZED_COST_THRESHOLD)
+  {
+    cost_winners[j] = 0;
+  }
+  else
+  {
+    cost_winners[j] = costs[1][j] < costs[0][j] ? 1 : -1;  
+  }
+  
+  object2destinations_distance[1] > object2destinations_distance[0] ? 1 : 0;
+
+  float total_cost[2] = {0, 0};
+  float cost_weights[3] = {10, 2, 1};
+  for (size_t i = 0; i < 2; i++)
+  {
+    for (size_t j = 0; j < 3; j++)
+    {
+      if (cost_winners[j])
+      {
+        // we have a clear winner (the cost wasn't similar)
+        total_cost[i] += cost_weights[j] * costs[i][j];
+      }
+    }
+  }
+
+  ROS_INFO(
+    "Wall1: %f, Opposite wall: %f",
+    ol_theta[0] * 180 / M_PI,
+    ol_theta[1] * 180 / M_PI
+  );
+  ROS_INFO("Winners: %d, %d, %d", cost_winners[0], cost_winners[1], cost_winners[2]);
+  ROS_INFO(
+    "Cost[0]: %f, %f, %f, Cost[1]: %f, %f, %f", 
+    costs[0][0], costs[0][1], costs[0][2],
+    costs[1][0], costs[1][1], costs[1][2]
+  );
+
+  // TODO: filter out any prediction that is going towards the object
+  int chosen_idx = (total_cost[1] < total_cost[0]) ? 1 : 0;
+  destination_point_out = destination_points[chosen_idx];
+
+  ROS_INFO(
+    "Robot: %f, Chosen wall: %f, Opposite wall: %f",
+    RP_theta * 180 / M_PI,
+    ol_theta[chosen_idx] * 180 / M_PI,
+    ol_theta[1-chosen_idx] * 180 / M_PI
+  );
 }
 
 float LinearMotionModel::oppositeAngle(float angle)
