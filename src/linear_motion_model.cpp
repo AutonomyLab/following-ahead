@@ -3,6 +3,8 @@
 #include <cv_bridge/cv_bridge.h>
 #include <ros/ros.h>
 #include <algorithm>
+#include <queue>
+#include <map>
 #include "linear_motion_model.hpp"
 #include "config.h"
 #include "utils.hpp"
@@ -35,6 +37,7 @@ int LinearMotionModel::updatePrediction(  cv::Mat &map, float map_resolution,
   size_t loop_count = 0;
 
   int status = 0;
+  int avoid_infinit_loop_counter = 0;
   while (remaining_distance > 0)
   {
     ROS_INFO("Prediction iter: %d", loop_count++);
@@ -56,6 +59,33 @@ int LinearMotionModel::updatePrediction(  cv::Mat &map, float map_resolution,
     remaining_distance = new_distance;
     object_point = object_point_out;
     destination_point = destination_point_out;
+
+    if (remaining_distance <= 0 && avoid_infinit_loop_counter<10)
+    {
+      avoid_infinit_loop_counter++;
+      cv::Point object_vector = destination_point - object_point;
+      float distance_from_object = cv::norm(object_vector) * map_resolution;
+      
+      if (distance_from_object < PREDICTION_LOOKAHEAD_DISTANCE)
+      {
+        remaining_distance = ((float)PREDICTION_LOOKAHEAD_DISTANCE-distance_from_object) * DESTINATION_EXTENTION_PERCENTAGE; 
+
+        cv::Point object_vector_normalized(object_vector.x , object_vector.y);
+        object_vector_normalized = object_vector_normalized / cv::norm(object_vector_normalized); 
+
+        float remaining_distance_pixels = remaining_distance / map_resolution;
+        destination_point.x += round(object_vector_normalized.x * remaining_distance_pixels);
+        destination_point.y += round(object_vector_normalized.y * remaining_distance_pixels);
+
+        object_vector = destination_point - object_point;
+        distance_from_object = cv::norm(object_vector) * map_resolution;
+
+        if (distance_from_object > PREDICTION_LOOKAHEAD_DISTANCE)
+        {
+          ROS_WARN("Prediction (%f) distance greater than lookahead (%f)", distance_from_object, PREDICTION_LOOKAHEAD_DISTANCE);
+        }
+      }
+    }
   }
   previous_destination_point_ = destination_point_out;
 
@@ -144,6 +174,21 @@ int LinearMotionModel::updateWayPoint(  cv::Mat &map, float map_resolution,
       // debug_map.at<uint8_t>(it.pos()) = 127;
     }
   }
+  // for debug
+  size_t num_obstacles_old = obstacles.size();
+  
+  obstacles = expandObstacleVector(map, map_resolution, obstacles);
+  
+  // for debug
+  if (obstacles.size() < num_obstacles_old )
+  {
+    ROS_ERROR("obs size: %d", obstacles.size());
+  }
+  if (obstacles.size() > num_obstacles_old + 10)
+  {
+    ROS_INFO("Obstacle increased by %d", obstacles.size() - num_obstacles_old);
+  }
+
 
   if (is_obstacle)
   {
@@ -156,9 +201,10 @@ int LinearMotionModel::updateWayPoint(  cv::Mat &map, float map_resolution,
       {
         obstacle_count++;
         obstacle_image.at<uint8_t>(obstacles[obstacle_idx]) = 255;
-        debug_map.at<uint8_t>(obstacles[obstacle_idx]) = 0;
+        // debug_map.at<uint8_t>(obstacles[obstacle_idx]) = 0;
       } 
     }
+
     // map = obstacle_image.clone();
     
     // cv::Mat mask = cv::Mat::zeros(map.rows + 2, map.cols + 2, CV_8UC1); 
@@ -176,7 +222,7 @@ int LinearMotionModel::updateWayPoint(  cv::Mat &map, float map_resolution,
 
     // TODO: floodfill before doing the hough transform
     std::vector<cv::Vec2f> lines;
-    cv::HoughLines(obstacle_image, lines, 2, CV_PI/180.0*2.0, obstacle_count*0.7, 0, 0);
+    cv::HoughLines(obstacle_image, lines, OBSTACLE_INFLATION / map_resolution, CV_PI/180.0*2.0, obstacle_count*0.5, 0, 0);
 
     // vector<Vec4i> lines;
     // HoughLinesP(obstacle_image, lines, 1, CV_PI/180, 15, 3, 1 );
@@ -202,18 +248,22 @@ int LinearMotionModel::updateWayPoint(  cv::Mat &map, float map_resolution,
         // find the new waypoint of the person
         
         // find the waypoint of prediction
-        float ol_theta = chooseObstacleDirection(
-          object_point, 
-          destination_point,
-          obstacles[0],
-          map,
-          map_resolution,
-          theta,
-          object_point_out,
-          destination_point_out,
-          distance, 
-          remaining_distance_out
-        );
+        if ( chooseObstacleDirection(
+                object_point, 
+                destination_point,
+                obstacles[0],
+                map,
+                map_resolution,
+                theta,
+                object_point_out,
+                destination_point_out,
+                distance, 
+                remaining_distance_out
+            )
+          )
+        {
+          return 1;
+        }
 
         // visualize the new waypoints
         cv::line(debug_map, object_point_out, destination_point_out, cv::Scalar(150), 1, CV_AA);
@@ -250,7 +300,7 @@ int LinearMotionModel::updateWayPoint(  cv::Mat &map, float map_resolution,
 
 }
 
-float LinearMotionModel::chooseObstacleDirection(
+int LinearMotionModel::chooseObstacleDirection(
                                                   cv::Point object_point, 
                                                   cv::Point destination_point,
                                                   cv::Point obstacle_point,
@@ -307,6 +357,8 @@ float LinearMotionModel::chooseObstacleDirection(
   object_point_out.x = std::max( std::min(object_point_out.x, map.cols-1), 0);
   object_point_out.y = std::max( std::min(object_point_out.y, map.rows-1), 0);
 
+  // TODO: see if backing off is crossing any obstacles
+
   cv::Mat R_w_rp = theta2RotationMatrix(RP_theta);
   cv::Mat R_w_vl1 = theta2RotationMatrix(ol_theta[0]);
   cv::Mat R_w_vl2 = theta2RotationMatrix(ol_theta[1]);
@@ -326,7 +378,9 @@ float LinearMotionModel::chooseObstacleDirection(
 
   if (covered_distance_pixels == 0)
   {
+    ROS_ERROR("Backing off error");
     object_point_out = object_point;
+    remaining_distance_out = 0;
     return 1;
   }
 
@@ -336,9 +390,8 @@ float LinearMotionModel::chooseObstacleDirection(
   
   if (remaining_distance_out <= 0)
   {
-    object_point_out = object_point;
+    ROS_ERROR("Remaining distance error: covered more than required!!!");
     remaining_distance_out = 0;
-    return 1;
   }
 
   float remaining_distance_pixels = remaining_distance_out / map_resolution;
@@ -435,10 +488,82 @@ float LinearMotionModel::chooseObstacleDirection(
     ol_theta[chosen_idx] * 180 / M_PI,
     ol_theta[1-chosen_idx] * 180 / M_PI
   );
+
+  return 0;
 }
 
 float LinearMotionModel::oppositeAngle(float angle)
 {
   // find the direction of the unit vector in the opposite direction
   return atan2(-sin(angle), -cos(angle));
+}
+
+std::vector<cv::Point> LinearMotionModel::expandObstacleVector(cv::Mat &map, float map_resolution, std::vector<cv::Point> obstacle_points)
+{
+  std::vector<cv::Point> expanded_obstacle_points;
+  std::queue<cv::Point> bfs_queue;
+  // the hash is pixel index row_idx * cols + col_idx
+  std::map<uint32_t, bool> explored_pixels;
+
+  for (size_t i = 0; i < obstacle_points.size(); i++)
+  {
+    uint32_t obstacle_hash = obstacle_points[i].y * map.cols + obstacle_points[i].x;
+    if ( explored_pixels.find(obstacle_hash) == explored_pixels.end() )
+    {
+      // add to queue only if it's not already there (duh!!!)
+      bfs_queue.push(obstacle_points[i]);
+      explored_pixels.insert(std::make_pair(obstacle_hash, true));
+    }
+  }
+
+  while (!bfs_queue.empty())
+  {
+    int bfs_length = bfs_queue.size();
+    cv::Point obstacle_point = bfs_queue.front();
+    bfs_queue.pop();
+    if (bfs_length == bfs_queue.size())
+      ROS_ERROR("queue pop didn't work");
+    expanded_obstacle_points.push_back(obstacle_point);
+
+    std::vector<cv::Point> neighbours;
+    neighbours.reserve(8);
+
+    // index offset for eight connected neighbours
+    int index_offset[8][2] = {
+      {-1, -1}, {-1, 0}, {-1, 1},
+      {0, -1}, {0, 1},
+      {+1, -1}, {+1, 0}, {+1, 1}
+    };
+
+    for (size_t neighbour_idx = 0; neighbour_idx < 8; neighbour_idx++)
+    {
+      int offset_x = index_offset[neighbour_idx][0];
+      int offset_y = index_offset[neighbour_idx][1];
+
+      cv::Point neighbour_point(obstacle_point.x + offset_x, obstacle_point.y + offset_y);
+
+      uint32_t obstacle_hash = neighbour_point.y * map.cols + neighbour_point.x;
+      // distance from the first obstacle point
+      cv::Point obstacle_vector = neighbour_point - obstacle_points[0];
+      cv::Mat obstacle_vector_mat(2, 1, CV_32F);
+      obstacle_vector_mat.at<float>(0, 0) = obstacle_vector.x;
+      obstacle_vector_mat.at<float>(1, 0) = obstacle_vector.y;
+      float distance = cv::norm(obstacle_vector_mat, cv::NORM_L1) * map_resolution;
+      if  ( 
+            explored_pixels.find(obstacle_hash) == explored_pixels.end() &&
+            neighbour_point.x > 0 &&
+            neighbour_point.x < map.cols &&
+            neighbour_point.y > 0 &&
+            neighbour_point.y < map.rows &&
+            map.at<uint8_t>(neighbour_point) == 255 &&
+            distance < OBSTACLE_INFLATION * 6
+          )
+      {
+        bfs_queue.push(neighbour_point);
+        explored_pixels.insert(std::make_pair(obstacle_hash, true));
+      }
+    }
+  }
+
+  return expanded_obstacle_points;
 }

@@ -86,6 +86,7 @@ private:
     // temporary stuffs
     image_transport::ImageTransport image_transport_;
     image_transport::Publisher map_image_pub_;
+    image_transport::Publisher map_image_pub_temp_;
 
     cv::Point3f prediction_local_;
     cv::Point3f prediction_global_;

@@ -75,6 +75,7 @@ Robot::Robot( ros::NodeHandle n,
 
   odom_topic_subscriber_ = n.subscribe("/husky/odom", 1, &Robot::odometryCallback, this);
   map_image_pub_ = image_transport_.advertise("map_image", 1);
+  map_image_pub_temp_ = image_transport_.advertise("map_image_temp", 1);
 
   map_service_client_ = n.serviceClient<nav_msgs::GetMap>("/dynamic_map", true);
 
@@ -241,12 +242,34 @@ void Robot::mapCallback(nav_msgs::OccupancyGrid &map_msg)
       *data = 0;
     }
   }
+  cv::Mat map_image_temp;
+  
+  // ------------------ Remove these if thresholding is not needed ------------------ //
+  cv::threshold(map_image_, map_image_temp, OCCUPANCY_THRESHOLD, 255, CV_THRESH_BINARY);
+  map_image_ = map_image_temp;
+  // ------------------ Remove these if thresholding is not needed ------------------ //
 
-  // ------------------ Remove these if thresholding is not needed ------------------ //
-  cv::Mat map_image_thresholded;
-  cv::threshold(map_image_, map_image_thresholded, OCCUPANCY_THRESHOLD, 255, CV_THRESH_BINARY);
-  map_image_ = map_image_thresholded;
-  // ------------------ Remove these if thresholding is not needed ------------------ //
+  // dilation to inflate the obstacles (and fill holes)
+  // publish the undilated image (for debugging)
+  cv::Mat debug_map_flipped;
+  cv::flip(map_image_, debug_map_flipped, 0);
+
+  cv_bridge::CvImage cv_ptr;
+  cv_ptr.image = debug_map_flipped;
+  cv_ptr.encoding = "mono8";
+  cv_ptr.header = map_occupancy_grid_.header;
+  map_image_pub_temp_.publish(cv_ptr.toImageMsg());
+
+  int dilation_size = round((double)OBSTACLE_INFLATION  / map_msg.info.resolution);
+  cv::Mat dilation_element = cv::getStructuringElement( 
+    cv::MORPH_RECT,
+    cv::Size(dilation_size, dilation_size)
+  );
+  dilate(map_image_, map_image_temp, dilation_element);
+
+  map_image_ = map_image_temp;
+  
+
 }
 
 cv::Point3f Robot::updatePrediction()
@@ -570,12 +593,8 @@ void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& 
     
     pub_particles_.publish(particles);
 
-
-    cv::Point3f prediction_global(prediction_x, prediction_y, 0);
-    cv::Point3f prediction_local = transformPoint(r0_T_map, prediction_global);
-
-    prediction_local_ = prediction_local;
-    prediction_global_ = prediction_global;
+    prediction_global_.x = prediction_x;
+    prediction_global_.y = prediction_y;
 
     if (map_image_.total())
     {
@@ -594,11 +613,14 @@ void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& 
       tf_broadcaster_.sendTransform(prediction_updated);
     }
 
+    prediction_local_ = transformPoint(r0_T_map, prediction_global_);
+    // angle of the prediction with respect to the robots x axis
+    double prediction_angle = atan2(prediction_local_.y, prediction_local_.x);
     static double nav_goal_last_sent = 0;
     if (
       // true
       isDeadManActive && 
-      prediction_local.x > 0 // don't follow if robot is behind
+      fabs(prediction_angle) < 120. * M_PI / 180.  // don't follow if robot is behind
     )
     {
       if (ros::Time::now().toSec() - nav_goal_last_sent > 1.0)

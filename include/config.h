@@ -84,7 +84,7 @@
 #define ROBOT_VELOCITY_VARIANCE_SCALING 0.5
 
 // lookahead distance (m) for prediction
-#define PREDICTION_LOOKAHEAD_DISTANCE 3.0
+#define PREDICTION_LOOKAHEAD_DISTANCE 2.0
 
 // maximum orientation change between two iterations (used for calculating probability of the measurement)
 #define MAX_DEL_THETA 0.17453292519943295 // 10 degrees
@@ -101,6 +101,9 @@
 #define OBSTACLE_CLEARANCE_DISTANCE 0.6
 // the normalized cost difference below this will count as a draw
 #define NORMALIZED_COST_THRESHOLD 0.1
+// dilation to inflate obstacles in map (in meters)
+#define OBSTACLE_INFLATION 0.35
+#define DESTINATION_EXTENTION_PERCENTAGE 1.2
 
 #define FOV 180.0
 

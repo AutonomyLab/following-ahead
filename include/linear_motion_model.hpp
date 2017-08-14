@@ -21,9 +21,9 @@ public:
                         );
 
     /**
-     * @return orientation of the obstacle vector that we have to follow
+     * @param object_point_out, destination_point_out: updated waypoints
      */
-    float chooseObstacleDirection(
+    int chooseObstacleDirection(
                                     cv::Point object_point, 
                                     cv::Point destination_point,
                                     cv::Point obstacle_point,
@@ -46,6 +46,10 @@ public:
      */
     float oppositeAngle(float angle);
 
+    /**
+     * @brief expand the number of obstacle pixels using BFS
+     */
+    std::vector<cv::Point> expandObstacleVector(cv::Mat &map, float map_resolution, std::vector<cv::Point> obstacle_points);
     LinearMotionModel(); 
 };
 
