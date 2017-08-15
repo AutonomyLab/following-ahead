@@ -1,8 +1,18 @@
-NavfnROS:
- allow_unknown: true
- planner_window_x: 10
- planner_window_y: 10
- visualize_potential: true 
+#NavfnROS:
+ # allow_unknown: true
+ # planner_window_x: 10
+ # planner_window_y: 10
+ # visualize_potential: true 
+
+GlobalPlanner:
+  allow_unknown: true
+  default_tolerance: 0.5
+  # visualize_potential: true 
+  old_navfn_behavior: false
+  use_quadratic: false
+  # use_dijkstra: false
+  
+
 #Independent settings for the planner's costmap
 global_costmap: 
   global_frame: /map

@@ -21,12 +21,19 @@
 
     <!-- Local param -->
     <param name="TebLocalPlannerROS/odom_topic" value="/robot_0/odom" />
-    
+    <!-- <param name="odom" value="/robot_0/odom" /> -->
+
     <!-- For default base planner -->
     <!-- <rosparam file="$(find person_follower)/config_nav/base_local_planner_params.yaml" command="load" /> -->
 
-    <!-- For teb base planner -->
-    <rosparam file="$(find person_follower)/config_nav/teb_local_planner_params.yaml" command="load" />
+    <!-- For teb base planner --> 
+   <rosparam file="$(find person_follower)/config_nav/teb_local_planner_params.yaml" command="load" />
     <param name="base_local_planner" value="teb_local_planner/TebLocalPlannerROS" />
+    
+    <!-- <rosparam file="$(find person_follower)/config_nav/dwa_local_planner_params.yaml" command="load" />
+    <param name="base_local_planner" value="dwa_local_planner/DWAPlannerROS" />
+ -->
+    <!-- Global planner -->
+    <param name="base_global_planner" value="global_planner/GlobalPlanner" />
   </node>
 </launch>

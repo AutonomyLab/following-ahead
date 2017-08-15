@@ -24,16 +24,15 @@ TebLocalPlannerROS:
   wheelbase: 0.0
   cmd_angle_instead_rotvel: false
   footprint_model: # types: "point", "circular", "two_circles", "line", "polygon"
-    type: "circular"
-    radius: 0.25 # for type "circular"
+    type: "polygon"
+    # radius: 0.25 # for type "circular"
     #line_start: [-0.3, 0.0] # for type "line"
     #line_end: [0.3, 0.0] # for type "line"
     #front_offset: 0.2 # for type "two_circles"
     #front_radius: 0.2 # for type "two_circles"
     #rear_offset: 0.2 # for type "two_circles"
     #rear_radius: 0.2 # for type "two_circles"
-    #vertices: [ [0.25, -0.05], [0.18, -0.05], [0.18, -0.18], [-0.19, -0.18], [-0.25, 0], [-0.19, 0.18], [0.18, 0.18], [0.18, 0.05], [0.25, 0.05] ] # for type "polygon"
- 
+    vertices:  [[-0.2555, -0.2], [-0.2555, 0.2], [0.2555, 0.2], [0.2555, -0.2]]
   # GoalTolerance
      
   xy_goal_tolerance: 0.1
