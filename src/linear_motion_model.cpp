@@ -56,34 +56,49 @@ int LinearMotionModel::updatePrediction(  cv::Mat &map, float map_resolution,
     }
     ROS_INFO("update prediction distance:%f", new_distance);
     
+    if (object_point == destination_point)
+    {
+      ROS_WARN("Object point and destination point same");
+      break;
+    }
+
     remaining_distance = new_distance;
     object_point = object_point_out;
     destination_point = destination_point_out;
 
-    if (remaining_distance <= 0 && avoid_infinit_loop_counter<10)
+    if (remaining_distance <= 0)
     {
-      avoid_infinit_loop_counter++;
-      cv::Point object_vector = destination_point - object_point;
-      float distance_from_object = cv::norm(object_vector) * map_resolution;
-      
-      if (distance_from_object < PREDICTION_LOOKAHEAD_DISTANCE)
+      if (avoid_infinit_loop_counter<20)
       {
-        remaining_distance = ((float)PREDICTION_LOOKAHEAD_DISTANCE-distance_from_object) * DESTINATION_EXTENTION_PERCENTAGE; 
-
-        cv::Point object_vector_normalized(object_vector.x , object_vector.y);
-        object_vector_normalized = object_vector_normalized / cv::norm(object_vector_normalized); 
-
-        float remaining_distance_pixels = remaining_distance / map_resolution;
-        destination_point.x += round(object_vector_normalized.x * remaining_distance_pixels);
-        destination_point.y += round(object_vector_normalized.y * remaining_distance_pixels);
-
-        object_vector = destination_point - object_point;
-        distance_from_object = cv::norm(object_vector) * map_resolution;
-
-        if (distance_from_object > PREDICTION_LOOKAHEAD_DISTANCE)
+        avoid_infinit_loop_counter++;
+        cv::Point object_vector = destination_point - current_object_point_;
+        float distance_from_object = cv::norm(object_vector) * map_resolution;
+        
+        if (distance_from_object < (float)PREDICTION_LOOKAHEAD_DISTANCE)
         {
-          ROS_WARN("Prediction (%f) distance greater than lookahead (%f)", distance_from_object, PREDICTION_LOOKAHEAD_DISTANCE);
+          // add some length so that you are fixed distance from the original object
+          remaining_distance = ((float)PREDICTION_LOOKAHEAD_DISTANCE-distance_from_object) * DESTINATION_EXTENTION_PERCENTAGE; 
+
+          cv::Point object_vector_normalized(object_vector.x , object_vector.y);
+          object_vector_normalized = object_vector_normalized / cv::norm(object_vector_normalized); 
+
+          float remaining_distance_pixels = remaining_distance / map_resolution;
+          destination_point.x += round(object_vector_normalized.x * remaining_distance_pixels);
+          destination_point.y += round(object_vector_normalized.y * remaining_distance_pixels);
+
+          object_vector = destination_point - current_object_point_;
+          distance_from_object = cv::norm(object_vector) * map_resolution;
+
+          if (distance_from_object > PREDICTION_LOOKAHEAD_DISTANCE)
+          {
+            ROS_WARN("Prediction (%f) distance greater than lookahead (%f)", distance_from_object, PREDICTION_LOOKAHEAD_DISTANCE);
+          }
         }
+      }
+      else
+      {
+        // probably it is not a good destination
+        return 1;
       }
     }
   }
@@ -222,7 +237,7 @@ int LinearMotionModel::updateWayPoint(  cv::Mat &map, float map_resolution,
 
     // TODO: floodfill before doing the hough transform
     std::vector<cv::Vec2f> lines;
-    cv::HoughLines(obstacle_image, lines, OBSTACLE_INFLATION / map_resolution, CV_PI/180.0*2.0, obstacle_count*0.5, 0, 0);
+    cv::HoughLines(obstacle_image, lines, OBSTACLE_INFLATION * 1.1 / map_resolution, CV_PI/180.0*2.0, obstacle_count*0.45, 0, 0);
 
     // vector<Vec4i> lines;
     // HoughLinesP(obstacle_image, lines, 1, CV_PI/180, 15, 3, 1 );
@@ -245,13 +260,17 @@ int LinearMotionModel::updateWayPoint(  cv::Mat &map, float map_resolution,
         pt2.y = cvRound(y0 - 1000*(a)); //??
         cv::line(debug_map, pt1, pt2, cv::Scalar(50), 1, CV_AA);
 
-        // find the new waypoint of the person
-        
-        // find the waypoint of prediction
+        // use some clearance from actual obstacle point
+        cv::Point obstacle_point(
+          obstacles[0].x - RP_unit_vector.x * 3, 
+          obstacles[0].y - RP_unit_vector.y * 3
+        );
+
+        // find the waypoint of person and prediction
         if ( chooseObstacleDirection(
                 object_point, 
                 destination_point,
-                obstacles[0],
+                obstacle_point,
                 map,
                 map_resolution,
                 theta,
@@ -357,7 +376,34 @@ int LinearMotionModel::chooseObstacleDirection(
   object_point_out.x = std::max( std::min(object_point_out.x, map.cols-1), 0);
   object_point_out.y = std::max( std::min(object_point_out.y, map.rows-1), 0);
 
-  // TODO: see if backing off is crossing any obstacles
+  cv::LineIterator backing_off_line_iterator(
+    map, 
+    cv::Point(round(obstacle_point.x), round(obstacle_point.y)),
+    cv::Point(round(object_point_out.x), round(object_point_out.y))
+  );
+  cv::LineIterator it = backing_off_line_iterator;
+
+  bool is_obstacle = false;
+  cv::Point new_obstacle_point;
+  for (size_t i = 0; i < backing_off_line_iterator.count; i++, it++)
+  {
+    if (map.at<uint8_t>(it.pos()) == 255)
+    {
+      is_obstacle = true;
+      new_obstacle_point = it.pos();
+      break;
+    }
+  }
+
+  if (is_obstacle)
+  {
+    // don't back off completely, go only half way of the new obstacle
+    float new_backoff_distance = cv::norm(new_obstacle_point - obstacle_point) / 2.0;
+    object_point_out.x = round(obstacle_point.x + new_backoff_distance * cos(backing_off_angle));
+    object_point_out.y = round(obstacle_point.y + new_backoff_distance * sin(backing_off_angle));
+    object_point_out.x = std::max( std::min(object_point_out.x, map.cols-1), 0);
+    object_point_out.y = std::max( std::min(object_point_out.y, map.rows-1), 0);
+  }
 
   cv::Mat R_w_rp = theta2RotationMatrix(RP_theta);
   cv::Mat R_w_vl1 = theta2RotationMatrix(ol_theta[0]);
@@ -391,7 +437,10 @@ int LinearMotionModel::chooseObstacleDirection(
   if (remaining_distance_out <= 0)
   {
     ROS_ERROR("Remaining distance error: covered more than required!!!");
+    // revert the update
+    object_point_out = object_point;
     remaining_distance_out = 0;
+    return 1;
   }
 
   float remaining_distance_pixels = remaining_distance_out / map_resolution;

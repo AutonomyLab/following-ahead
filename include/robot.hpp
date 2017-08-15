@@ -90,6 +90,7 @@ private:
 
     cv::Point3f prediction_local_;
     cv::Point3f prediction_global_;
+    cv::Point3f prediction_global_prev_;
     LinearMotionModel person_motion_model_;
 
     cv::Mat map_image_;

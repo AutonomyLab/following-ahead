@@ -290,12 +290,16 @@ cv::Point3f Robot::updatePrediction()
   cv::Point new_person_image_coordinates, new_prediction_image_coordinates;
   cv::Mat debug_map;
   
-  person_motion_model_.updatePrediction(   
+  if (person_motion_model_.updatePrediction(   
     map_image_, map_occupancy_grid_.info.resolution,
     person_image_coordinates, prediction_image_coordinates, PREDICTION_LOOKAHEAD_DISTANCE, 
     new_person_image_coordinates, new_prediction_image_coordinates,
     debug_map
-  );
+  ) == 1)
+  {
+    ROS_ERROR("updatePrediction failed");
+    return prediction_global_prev_;
+  }
 
   cv::Mat debug_map_flipped;
   cv::flip(debug_map, debug_map_flipped, 0);
@@ -312,12 +316,13 @@ cv::Point3f Robot::updatePrediction()
     new_prediction_image_coordinates.y - new_person_image_coordinates.y,
     new_prediction_image_coordinates.x - new_person_image_coordinates.x
   );
-
-  return cv::Point3f(
-    new_prediction_image_coordinates.x * map_occupancy_grid_.info.resolution + (int)map_occupancy_grid_.info.origin.position.x,
-    new_prediction_image_coordinates.y * map_occupancy_grid_.info.resolution + (int)map_occupancy_grid_.info.origin.position.y,
-    orientation
-  );
+  prediction_global_prev_ =  
+                          cv::Point3f(
+                            new_prediction_image_coordinates.x * map_occupancy_grid_.info.resolution + (int)map_occupancy_grid_.info.origin.position.x,
+                            new_prediction_image_coordinates.y * map_occupancy_grid_.info.resolution + (int)map_occupancy_grid_.info.origin.position.y,
+                            orientation
+                          );
+  return prediction_global_prev_;
 }
 
 void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& msg)
@@ -620,7 +625,7 @@ void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& 
     if (
       // true
       isDeadManActive && 
-      fabs(prediction_angle) < 120. * M_PI / 180.  // don't follow if robot is behind
+      fabs(prediction_angle) < 145. * M_PI / 180.  // don't follow if robot is behind
     )
     {
       if (ros::Time::now().toSec() - nav_goal_last_sent > 1.0)

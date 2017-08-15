@@ -18,7 +18,7 @@ window
 (
   size [ 928 1028 ] # in pixels
   scale 59.578   # pixels per meter
-  center [ 0.952  -0.243 ]
+  center [ 0.969  -0.076 ]
   rotate [ 0.000  0.000 ]
   			
   show_data 0              # 1=on 0=off
@@ -30,7 +30,7 @@ floorplan
   name "cave"
   size [15.000 15.000 0.800]
   pose [0.000 0.000 0.000 0.000]
-  bitmap "bitmaps/road.png"
+  bitmap "bitmaps/road_curved.png"
 )
 
 pioneer2dx
@@ -38,7 +38,7 @@ pioneer2dx
   color "red"
   # can refer to the robot by this name
   name "r0"
-  pose [ 3.453 0.024 0.000 -173.270 ] 
+  pose [ -0.093 -3.693 0.000 -106.112 ] 
 
   # pioneer2dx's sonars will be ranger:0 and the laser will be ranger:1
   sicklaser( pose [ 0.000 0.000 0.000 0.000 ] ) 
@@ -77,7 +77,7 @@ pioneer2dx
   color "red"
   # can refer to the robot by this name
   name "r1"
-  pose [ 6.378 -0.017 0.000 -157.261 ] 
+  pose [ 0.081 -1.612 0.000 -89.213 ] 
 
   # pioneer2dx's sonars will be ranger:0 and the laser will be ranger:1
   sicklaser( pose [ 0.000 0.000 0.000 0.000 ] ) 
