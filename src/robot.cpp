@@ -281,11 +281,41 @@ cv::Point3f Robot::updatePrediction()
     (absolute_tf_pose_human_.getOrigin().x() - (int)map_occupancy_grid_.info.origin.position.x) / map_occupancy_grid_.info.resolution,
     (absolute_tf_pose_human_.getOrigin().y() - (int)map_occupancy_grid_.info.origin.position.y) / map_occupancy_grid_.info.resolution
   );
+
+  cv::Point robot_image_coordinates(
+    (absolute_tf_pose_robot_.getOrigin().x() - (int)map_occupancy_grid_.info.origin.position.x) / map_occupancy_grid_.info.resolution,
+    (absolute_tf_pose_robot_.getOrigin().y() - (int)map_occupancy_grid_.info.origin.position.y) / map_occupancy_grid_.info.resolution
+  );  
   
   cv::Point prediction_image_coordinates(
     (prediction_global_.x - (int)map_occupancy_grid_.info.origin.position.x) / map_occupancy_grid_.info.resolution,
     (prediction_global_.y - (int)map_occupancy_grid_.info.origin.position.y) / map_occupancy_grid_.info.resolution
   );
+
+  // check if the robot can go to the prediction 
+  cv::LineIterator robot_prediction_line_iterator(
+    map_image_, 
+    cv::Point(round(robot_image_coordinates.x), round(robot_image_coordinates.y)),
+    cv::Point(round(prediction_image_coordinates.x), round(prediction_image_coordinates.y))
+  );
+
+  bool is_robot_to_prediction_feasible = true;
+  cv::LineIterator it = robot_prediction_line_iterator;
+  for (size_t i = 0; i < robot_prediction_line_iterator.count; i++, it++)
+  {
+    if (map_image_.at<uint8_t>(it.pos()) == 255)
+    {
+      is_robot_to_prediction_feasible = false;
+      break;
+    }
+  }
+
+  if (is_robot_to_prediction_feasible)
+  {
+    // don't update the prediction
+    prediction_global_prev_ = prediction_global_;
+    return prediction_global_;
+  }
 
   cv::Point new_person_image_coordinates, new_prediction_image_coordinates;
   cv::Mat debug_map;
@@ -366,6 +396,8 @@ void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& 
     return;
     // ros::Duration(1.0).sleep();
   }
+
+  absolute_tf_pose_robot_ = r0_T_map.inverse();
   
   if (!particle_filter_.isInitialized())
   {

@@ -54,6 +54,7 @@
 	    <param name="xmin" value="-15"/>
 	    <param name="ymin" value="-15"/>
 	    <param name="xmax" value="15"/>
+
 	    <param name="ymax" value="15"/>
 	    <rosparam command="load" file="$(find person_follower)/config_nav/mapper_params.yaml" />
 	</node>
