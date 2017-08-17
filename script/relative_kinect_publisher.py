@@ -23,6 +23,7 @@ def callback(helmetMsg, kinectMsg):
     relativeQuaternion = transform.transformations.quaternion_from_matrix(relativePose)
 
     relativePoseMsg = TransformStamped()
+    relativePoseMsg.header.stamp = rospy.Time.now()
     relativePoseMsg.header.frame_id = "base_link"
     relativePoseMsg.child_frame_id = "person_follower/helmet_relative"
     relativePoseMsg.transform.translation.x = relativePose[0, 3]
@@ -46,7 +47,7 @@ def callback(helmetMsg, kinectMsg):
 if __name__ == '__main__':
     rospy.init_node('node_name')
 
-    helmetSub = message_filters.Subscriber('/vicon/helmet2/helmet2', TransformStamped)
+    helmetSub = message_filters.Subscriber('/vicon/helmet/helmet', TransformStamped)
     kinectSub = message_filters.Subscriber('/vicon/priss_follower/priss_follower', TransformStamped)
 
     ts = message_filters.TimeSynchronizer([helmetSub, kinectSub], 10)

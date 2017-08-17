@@ -10,12 +10,12 @@ transform_tolerance: 0.3
 obstacle_range: 2.5
 max_obstacle_height: 2.0
 raytrace_range: 5.0
-footprint: [[-0.2555, -0.2], [-0.2555, 0.2], [0.2555, 0.2], [0.2555, -0.2]]
+footprint: [[-0.05, -0.05], [-0.05, 0.05], [0.05, 0.05], [0.05, -0.05]]
 #robot_radius: 0.46
-footprint_padding: 0.1
-inflation_radius: 0.25
+footprint_padding: 0.001
+inflation_radius: 0.001
 cost_scaling_factor: 10.0
-lethal_cost_threshold: 100
+lethal_cost_threshold: 10
 unknown_cost_value: 255
 # observation_sources: robot_0/base_scan_1
 base_scan: {data_type: LaserScan, expected_update_rate: 10,

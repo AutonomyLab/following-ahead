@@ -1,7 +1,0 @@
-<launch>
-	<include file="$(find person_follower)/launch/openni.launch" />
-	<include file="$(find yolo2)/launch/yolo.launch" />
-	<node pkg="person_follower" type="person_follower_node" name="person_follower_node" output="screen" />
-	<node pkg="rostopic" type="rostopic" name="rostopic" args='pub -l /vision/yolo2/enable std_msgs/Bool "data: true"'/>
-
-</launch>

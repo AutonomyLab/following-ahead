@@ -51,8 +51,8 @@
 #define THETA_IDX 5
 // Infinite impulse response (IIR) filter for velocity and orientation
 // higher these values, more importance to the new readings
-#define VEL_IIR_ALPHA 0.3
-#define THETA_IIR_ALPHA 0.3
+#define VEL_IIR_ALPHA 0.1
+#define THETA_IIR_ALPHA 0.01
 
 // process noise during the prediction step of EKF
 #define X_T_PROCESS_NOISE_VAR 0.01
@@ -84,7 +84,7 @@
 #define ROBOT_VELOCITY_VARIANCE_SCALING 0.5
 
 // lookahead distance (m) for prediction
-#define PREDICTION_LOOKAHEAD_DISTANCE 3.0
+#define PREDICTION_LOOKAHEAD_DISTANCE 2.0
 
 // maximum orientation change between two iterations (used for calculating probability of the measurement)
 #define MAX_DEL_THETA 0.17453292519943295 // 10 degrees

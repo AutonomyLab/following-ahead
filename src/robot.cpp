@@ -357,6 +357,7 @@ cv::Point3f Robot::updatePrediction()
 
 void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& msg)
 {
+  ROS_INFO("Odometry callback");
   current_odometry_ = *msg;
 
   // if  ( 

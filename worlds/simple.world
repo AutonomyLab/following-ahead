@@ -28,7 +28,7 @@ window
 floorplan
 ( 
   name "cave"
-  size [15.000 15.000 0.800]
+  size [12.000 12.000 0.800]
   pose [0.000 0.000 0.000 0.000]
   bitmap "bitmaps/road_curved.png"
 )
