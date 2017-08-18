@@ -1,0 +1,6 @@
+<launch>
+        <group>
+            <machine name="priss" address="192.168.1.10" default="true" user="autolab" password="autolab" env-loader="~/env_loader.sh" />
+            <include machine="priss" file="~/person_follower.launch" />
+        </group>
+</launch>

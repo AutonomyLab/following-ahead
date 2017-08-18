@@ -108,9 +108,9 @@
 #define FOV 180.0
 
 static const float g_fov = FOV*M_PI/180.0;
-static const float focalLengthX = 538.914261;
-static const float focalLengthY = 504.416883;
-static const float cameraPrincipalX = 311.027555;
-static const float cameraPrincipalY = 260.575111;
+static const float focalLengthX = 616.3927001953125;
+static const float focalLengthY = 616.5491333007812;
+static const float cameraPrincipalX = 316.10888671875;
+static const float cameraPrincipalY = 248.85939025878906;
 
 #endif

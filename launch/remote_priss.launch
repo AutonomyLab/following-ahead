@@ -1,0 +1,18 @@
+<?xml version="1.0" ?>
+<launch>
+
+  <!--Sound player-->
+  
+  <node pkg="sound_player" type="sound_player" name="sound_player" output="screen">
+  </node>
+  
+
+  <!-- run p2os to control the pioneer -->
+
+  <rosparam file="$(find p2os_launch)/base_local_planner_params.yaml" command="load" />
+  <node pkg="p2os_driver" type="p2os" name="p2os"  output="screen" >
+    <param name="use_sonar" value="false" />
+    <remap from="/pose" to="/odom" />
+  </node>
+
+</launch>

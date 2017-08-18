@@ -1,9 +1,22 @@
 <launch>
-	<remap from="/camera/rgb/image_rect_color" to= "/camera/color/image_raw"/>
+	<param name="/use_sim_time" value="false" />
+
+	<remap from="/camera/rgb/image_rect_color" to= "/camera/rgb/image_raw"/>
 
 	<include file="$(find yolo2)/launch/yolo.launch" />
 
-	<include file= "$(find realsense_camera)/launch/zr300_nodelet_default.launch"/>
+	<include file= "$(find person_follower)/launch/zr300_registered.launch">
+		<arg name="mode" value="manual" />
+		
+		<arg name="depth_width" value="640" />
+		<arg name="depth_height" value="480" />
+		<arg name="depth_fps" value="30" />
+
+		<arg name="color_width" value="640" />
+		<arg name="color_height" value="480" />
+		<arg name="color_fps" value="30" />
+
+	</include>
 	<node pkg="rqt_image_view" type="rqt_image_view" name="rqt_image_view" output="screen"/>
 	<node pkg="rostopic" type="rostopic" name="rostopic" args='pub -l /vision/yolo2/enable std_msgs/Bool "data: true"'/>
 
