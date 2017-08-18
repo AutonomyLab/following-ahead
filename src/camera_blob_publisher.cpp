@@ -14,6 +14,7 @@
 #include <pcl/point_types.h>
 #include <sensor_msgs/PointCloud.h>
 #include <geometry_msgs/Point32.h>
+#include <geometry_msgs/TransformStamped.h>
 #include "robot.hpp"
 #include "utils.hpp"
 
@@ -32,8 +33,10 @@ class CameraBlobPublisher
 {
 private:
   ros::Publisher pubPointCloud_;
+  ros::Publisher pubRelativePose_;
   sensor_msgs::PointCloud::Ptr pointCloudMsg_;
   ros::NodeHandle nh_;
+  tf::TransformBroadcaster tf_broadcaster_;
 
 public:
   CameraBlobPublisher(ros::NodeHandle n)
@@ -41,23 +44,32 @@ public:
       pointCloudMsg_(new sensor_msgs::PointCloud)
   {
     pubPointCloud_ =  nh_.advertise<sensor_msgs::PointCloud>("person_cloud", 1);
+    pubRelativePose_ = nh_.advertise<geometry_msgs::TransformStamped>("/person_follower/groundtruth_pose", 1);
   }
 
   void detectionCallback(const yolo2::ImageDetections::ConstPtr &detectionMsg, const sensor_msgs::Image::ConstPtr &depthMsg)
   {
-    std::vector<cv::Point2f> distortedPoints;
     std::vector<cv::Point2f> undistortedPoints;
-
+    std::vector<float> depthValues;
+    std::vector<cv::Point2f> vectPersonPoints;
+    
     cv_bridge::CvImageConstPtr cv_ptr;
     cv_ptr = cv_bridge::toCvShare(depthMsg);
     
-    std::vector<cv::Point2f> vectPersonPoints;
-    cv::Mat matPersonSegmented = cv::Mat::zeros(depthMsg->height, depthMsg->width, CV_8UC1);
+    // cv::Mat matPersonSegmented = cv::Mat::zeros(depthMsg->height, depthMsg->width, CV_8UC1);
     
     for (int i=0; i<detectionMsg->detections.size(); i++)
     {
       if (detectionMsg->detections[i].class_id != 0)
+      {
         continue;
+      }
+
+      if (vectPersonPoints.size())
+      {
+        // another person, don't care
+        break;
+      }
       
       // Stg::ModelBlobfinder  myFinder;
       // std::cout << detectionMsg->detections[i].class_id << std::endl;
@@ -65,15 +77,7 @@ public:
       // std::cout << detectionMsg->detections[i].width << ", " << detectionMsg->detections[i].height << std::endl << std::endl  ;
       // // myFinder.fov = 70.0*M_PI/180.0;
       // myFinder.
-      
-      distortedPoints.push_back(cv::Point2f(
-        detectionMsg->detections[i].roi.x_offset + detectionMsg->detections[i].roi.width/2.0 ,
-        detectionMsg->detections[i].roi.y_offset + detectionMsg->detections[i].roi.height/2.0
-
-      ));
-
-      std::vector<float> depthValues;
-
+    
       for (
             int row=detectionMsg->detections[i].roi.y_offset; 
             row<detectionMsg->detections[i].roi.y_offset+detectionMsg->detections[i].roi.height;
@@ -102,6 +106,7 @@ public:
       float medianDepth = depthValues[medianIdx];
 
       std::vector<cv::Point2f> vectPersonPointsSegmented;
+      std::vector<float> depthValuesSegmented;
 
       for (size_t i = 0; i < vectPersonPoints.size(); i++)        
       {
@@ -114,16 +119,18 @@ public:
             )   
         {
           vectPersonPointsSegmented.push_back(vectPersonPoints[i]);
+          depthValuesSegmented.push_back(depthValues[i]);
         }
       }
 
       vectPersonPoints = vectPersonPointsSegmented;
+      depthValues = depthValuesSegmented;
     }
 
     // cv::imshow("window", matPersonSegmented);
     // cv::waitKey(5);
 
-    if (distortedPoints.size()==0)
+    if (vectPersonPoints.size()==0)
     {
       return;
     }
@@ -143,32 +150,6 @@ public:
     distortionCoeffs[2] = -0.0005786623223684728;
     distortionCoeffs[3] = -0.0006174440495669842;
     distortionCoeffs[4] = 0.000000;
-
-    cv::undistortPoints(distortedPoints, undistortedPoints, cameraMatrix, distortionCoeffs);
-
-    std::cout << "Depth image size: " <<  cv_ptr->image.size() << std::endl;
-    std::cout << "undistortedPoints: " << undistortedPoints.size() << std::endl;
-    for (size_t i = 0; i < undistortedPoints.size(); i++)
-    {
-      cv::Point2f pt = undistortedPoints[i];
-      float depth = cv_ptr->image.at<float>( (size_t)distortedPoints[i].y, (size_t)distortedPoints[i].x );
-
-      float x = (distortedPoints[i].x - cameraPrincipalX)/focalLengthX*depth;
-      float y = (distortedPoints[i].y - cameraPrincipalY)/focalLengthY*depth;
-      float z = depth;
-
-      std::cout << distortedPoints[i] << std::endl;
-      std::cout << "(" 
-                << x << ", "
-                << y << ", "
-                << z << ") "
-                << std::endl
-                << std::endl;
-
-      std::cout << "depth: " << z << std::endl;
-
-      // std::cout << getBlobBearing(pt.x * cameraMatrix.at<float>(0, 0)) * 180.0 / M_PI << std::endl;
-    }
 
     undistortedPoints.clear();
     cv::undistortPoints(vectPersonPoints, undistortedPoints, cameraMatrix, distortionCoeffs);
@@ -193,12 +174,62 @@ public:
 
       pointCloudMsg_->points.push_back(point);
     }
-
-
     pubPointCloud_.publish(pointCloudMsg_);
+
+    // find the center of the person
+    int max_x = -1;
+    int min_x = cv_ptr->image.cols + 1;
     
-    
-    std::cout << std::endl;
+    for (size_t i = 0; i < vectPersonPoints.size(); i++)
+    {
+      if (vectPersonPoints[i].x > max_x)
+      {
+        max_x = vectPersonPoints[i].x;
+      }
+
+      if (vectPersonPoints[i].x < min_x)
+      {
+        min_x = vectPersonPoints[i].x;
+      }
+    }
+
+    size_t medianIdx = depthValues.size()/2;
+    std::nth_element(depthValues.begin(), depthValues.begin()+medianIdx, depthValues.end());
+    float person_z = depthValues[medianIdx];
+
+    float person_x = (min_x + max_x) / 2.0;
+    person_x = (person_x - cameraPrincipalX)/focalLengthX*person_z;
+    float person_y = 0;
+
+    geometry_msgs::TransformStamped transform_stamped;
+    transform_stamped.header.stamp = ros::Time::now();
+    transform_stamped.header.frame_id = "world";
+    transform_stamped.transform.translation.x = -person_x;
+    transform_stamped.transform.translation.y = -person_z;
+    transform_stamped.transform.translation.z = -person_y;
+
+    transform_stamped.transform.rotation.x = 0;
+    transform_stamped.transform.rotation.y = 0;
+    transform_stamped.transform.rotation.z = 0;
+    transform_stamped.transform.rotation.w = 1;
+
+    pubRelativePose_.publish(transform_stamped);
+
+    tf::StampedTransform relative_tf;
+    relative_tf.child_frame_id_ = "relative_pose"; // source
+    relative_tf.frame_id_ = "world"; // target
+    relative_tf.stamp_ = transform_stamped.header.stamp;
+
+    relative_tf.setOrigin(tf::Vector3( 
+      transform_stamped.transform.translation.x, 
+      transform_stamped.transform.translation.y, 
+      0
+    ));
+
+    relative_tf.setRotation(tf::Quaternion(0, 0, 0, 1));
+
+    tf_broadcaster_.sendTransform(relative_tf);
+
   }
 };
 
