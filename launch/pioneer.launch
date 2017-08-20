@@ -4,6 +4,7 @@
 	<arg name="map_frame" default="map" />
 	<arg name="person_frame" default="person_raw" />
 	<arg name="use_deadman" default="true" />
+	<arg name="laser_frame" default="laser" />
 
 	<param name="/use_sim_time" value="false"/>
 	<arg name="move_base_goal_frequency" default="0.5" />
@@ -14,13 +15,16 @@
 
 	<!-- <include file="$(find person_follower)/launch/hokuyo.launch" /> -->
 	
-	<node pkg="tf" type="static_transform_publisher" name="static_transform_publisher" args="0.11 0 0.220 0 0 0 base_link laser 50"/>
-
-	<include file="$(find vicon_bridge)/launch/vicon.launch" />
+	<node pkg="tf" type="static_transform_publisher" name="static_transform_publisher" args="0.11 0 0.220 0 0 0 $(arg base_frame) $(arg laser_frame) 50"/>
 
 	<!-- <node pkg="person_follower" type="relative_kinect_publisher.py" name="relative_kinect_publisher" />  -->
 	<node pkg="person_follower" type="camera_blob_publisher_node" name="camera_blob_publisher_node">
 		<param name="image_transport" value="compressedDepth" />
+		<param name="camera_wrt_laser_x" type="float" value="-0.075" />
+		<param name="camera_wrt_laser_y" type="float" value="-0.01" />
+		<param name="camera_wrt_laser_z" type="float" value="0.174" />
+		<param name="camera_wrt_laser_pitch" type="float" value="16.5" />
+		<param name="camera_parent_frame" value="$(arg laser_frame)" />
 	</node>
 	
 	<node pkg="person_follower" type="person_follower_node" name="person_follower_node" output="screen">

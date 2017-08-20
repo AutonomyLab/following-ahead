@@ -45,6 +45,13 @@ private:
   ros::NodeHandle nh_;
   tf::TransformBroadcaster tf_broadcaster_;
 
+  float camera_wrt_laser_x_;
+  float camera_wrt_laser_y_;
+  float camera_wrt_laser_z_;
+  float camera_wrt_laser_pitch_;
+
+  std::string camera_parent_frame_;
+
 public:
   CameraBlobPublisher(ros::NodeHandle n)
     : nh_(n),
@@ -52,6 +59,32 @@ public:
   {
     pubPointCloud_ =  nh_.advertise<sensor_msgs::PointCloud>("person_cloud", 1);
     pubRelativePose_ = nh_.advertise<geometry_msgs::TransformStamped>("/person_follower/groundtruth_pose", 1);
+  
+    if (!nh_.getParam("camera_wrt_laser_x", camera_wrt_laser_x_))
+    {
+      camera_wrt_laser_x_ = CAM_WRT_LASER_X;
+    }
+
+    if (!nh_.getParam("camera_wrt_laser_y", camera_wrt_laser_y_))
+    {
+      camera_wrt_laser_y_ = CAM_WRT_LASER_Y;
+    }
+
+    if (!nh_.getParam("camera_wrt_laser_z", camera_wrt_laser_z_))
+    {
+      camera_wrt_laser_z_ = CAM_WRT_LASER_Z;
+    }
+
+    if (!nh_.getParam("camera_wrt_laser_pitch", camera_wrt_laser_pitch_))
+    {
+      camera_wrt_laser_pitch_ = CAM_WRT_LASER_PITCH;
+    }
+
+    if (!nh_.getParam("camera_parent_frame", camera_parent_frame_))
+    {
+      camera_parent_frame_ = "laser";
+    }
+
   }
 
   void detectionCallback(const yolo2::ImageDetections::ConstPtr &detectionMsg, const sensor_msgs::Image::ConstPtr &depthMsg)
@@ -263,16 +296,16 @@ public:
     // ----------------------- broadcast camera tf wrt world ---------------------------------
     tf::StampedTransform camera_tf;
     camera_tf.child_frame_id_ = "camera"; // source
-    camera_tf.frame_id_ = "world"; // target
+    camera_tf.frame_id_ = camera_parent_frame_; // target
     camera_tf.stamp_ = transform_stamped.header.stamp;
 
     camera_tf.setOrigin(tf::Vector3( 
-      CAM_WRT_LASER_X, 
-      CAM_WRT_LASER_Y, 
-      CAM_WRT_LASER_Z
+      camera_wrt_laser_x_, 
+      camera_wrt_laser_y_, 
+      camera_wrt_laser_z_
     )); 
 
-    float pitch_angle = CAM_WRT_LASER_PITCH * M_PI / 180.;
+    float pitch_angle = camera_wrt_laser_pitch_ * M_PI / 180.;
     
     cv::Point3f basis_x(
       0, 1, 0

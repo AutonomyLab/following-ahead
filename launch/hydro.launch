@@ -1,7 +1,7 @@
 <launch>
         <group>
             <machine name="hydro" address="hydro" default="true" user="payam" env-loader="~/env_loader.sh" />
-
             <include file="$(find person_follower)/launch/hokuyo.launch" />
+            <include file="$(find person_follower)/launch/camera.launch" />
         </group>
 </launch>
