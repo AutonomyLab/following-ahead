@@ -18,7 +18,10 @@
 
 	<include file="$(find vicon_bridge)/launch/vicon.launch" />
 
-	<node pkg="person_follower" type="relative_kinect_publisher.py" name="relative_kinect_publisher" /> 
+	<!-- <node pkg="person_follower" type="relative_kinect_publisher.py" name="relative_kinect_publisher" />  -->
+	<node pkg="person_follower" type="camera_blob_publisher_node" name="camera_blob_publisher_node">
+		<param name="image_transport" value="compressedDepth" />
+	</node>
 	
 	<node pkg="person_follower" type="person_follower_node" name="person_follower_node" output="screen">
 		<param name="base_frame" value="$(arg base_frame)" />

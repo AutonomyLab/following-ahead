@@ -8,7 +8,8 @@
 #include <message_filters/time_synchronizer.h>
 #include <message_filters/synchronizer.h>
 #include <message_filters/sync_policies/approximate_time.h>
-#include "image_transport/image_transport.h"
+#include <image_transport/image_transport.h>
+#include <image_transport/subscriber_filter.h>
 #include <cv_bridge/cv_bridge.h>
 #include <pcl_ros/point_cloud.h>
 #include <pcl/point_types.h>
@@ -49,13 +50,14 @@ public:
 
   void detectionCallback(const yolo2::ImageDetections::ConstPtr &detectionMsg, const sensor_msgs::Image::ConstPtr &depthMsg)
   {
+
     std::vector<cv::Point2f> undistortedPoints;
     std::vector<float> depthValues;
     std::vector<cv::Point2f> vectPersonPoints;
     
     cv_bridge::CvImageConstPtr cv_ptr;
     cv_ptr = cv_bridge::toCvShare(depthMsg);
-    
+
     // cv::Mat matPersonSegmented = cv::Mat::zeros(depthMsg->height, depthMsg->width, CV_8UC1);
     
     for (int i=0; i<detectionMsg->detections.size(); i++)
@@ -84,13 +86,22 @@ public:
             row++
           )
       {
+        if (row < 0 || row >= cv_ptr->image.rows)
+        {
+          continue;
+        }
         for (
               int col=detectionMsg->detections[i].roi.x_offset; 
               col<detectionMsg->detections[i].roi.x_offset+detectionMsg->detections[i].roi.width;
               col++
             )
         {
-          float depth = cv_ptr->image.at<float>(row, col);
+          if (col < 0 || col >= cv_ptr->image.cols)
+          {
+            continue;
+          }
+
+          float depth = ((float)cv_ptr->image.at<uint16_t>(row, col)) / 1000.0;
           if (depth < 0.01 || depth > 6.0 || !std::isfinite(depth))
           {
             continue;
@@ -99,6 +110,12 @@ public:
           vectPersonPoints.push_back(cv::Point2f(col, row));
           depthValues.push_back(depth);
         }
+      }
+
+      if (vectPersonPoints.size() == 0)
+      {
+        ROS_WARN("No point in person: %d", i);
+        continue;
       }
 
       size_t medianIdx = depthValues.size()/2;
@@ -113,9 +130,10 @@ public:
         int row = vectPersonPoints[i].y;
         int col = vectPersonPoints[i].x;
 
+        float depth = ((float)cv_ptr->image.at<uint16_t>(row, col))/1000.0;
         if (
-              cv_ptr->image.at<float>(row, col) >= medianDepth-0.12 &&
-              cv_ptr->image.at<float>(row, col) <= medianDepth+0.12
+              depth >= medianDepth-0.12 &&
+              depth <= medianDepth+0.12
             )   
         {
           vectPersonPointsSegmented.push_back(vectPersonPoints[i]);
@@ -132,36 +150,38 @@ public:
 
     if (vectPersonPoints.size()==0)
     {
+      ROS_WARN("No detection");
       return;
     }
 
-    cv::Mat cameraMatrix = cv::Mat::eye(3, 3, CV_32F);
-    cameraMatrix.at<float>(0, 0) = focalLengthX;
-    cameraMatrix.at<float>(1, 1) = focalLengthY;
-    cameraMatrix.at<float>(0, 2) = cameraPrincipalX;
-    cameraMatrix.at<float>(1, 2) = cameraPrincipalY;
+    // cv::Mat cameraMatrix = cv::Mat::eye(3, 3, CV_32F);
+    // cameraMatrix.at<float>(0, 0) = focalLengthX;
+    // cameraMatrix.at<float>(1, 1) = focalLengthY;
+    // cameraMatrix.at<float>(0, 2) = cameraPrincipalX;
+    // cameraMatrix.at<float>(1, 2) = cameraPrincipalY;
 
-    cv::Mat newCameraMatrix(3, 3, CV_32F);
+    // cv::Mat newCameraMatrix(3, 3, CV_32F);
     
-    cv::Vec<float, 5> distortionCoeffs;
+    // cv::Vec<float, 5> distortionCoeffs;
     
-    distortionCoeffs[0] = 0.07346920669078827;
-    distortionCoeffs[1] = -0.12585918605327606;
-    distortionCoeffs[2] = -0.0005786623223684728;
-    distortionCoeffs[3] = -0.0006174440495669842;
-    distortionCoeffs[4] = 0.000000;
+    // distortionCoeffs[0] = 0.07346920669078827;
+    // distortionCoeffs[1] = -0.12585918605327606;
+    // distortionCoeffs[2] = -0.0005786623223684728;
+    // distortionCoeffs[3] = -0.0006174440495669842;
+    // distortionCoeffs[4] = 0.000000;
 
-    undistortedPoints.clear();
-    cv::undistortPoints(vectPersonPoints, undistortedPoints, cameraMatrix, distortionCoeffs);
+    // undistortedPoints.clear();
+    // cv::undistortPoints(vectPersonPoints, undistortedPoints, cameraMatrix, distortionCoeffs);
+    
     pointCloudMsg_->header.frame_id = "world";
     // pointCloudMsg_->height = pointCloudMsg_->width = 1;
     pointCloudMsg_->header.stamp = ros::Time::now();
     pointCloudMsg_->points.clear();
 
-    for (size_t i = 0; i < undistortedPoints.size(); i++)
+    for (size_t i = 0; i < vectPersonPoints.size(); i++)
     {
-      cv::Point2f pt = undistortedPoints[i];
-      float depth = cv_ptr->image.at<float>( (size_t)vectPersonPoints[i].y, (size_t)vectPersonPoints[i].x );
+      // cv::Point2f pt = undistortedPoints[i];
+      float depth = cv_ptr->image.at<uint16_t>( (size_t)vectPersonPoints[i].y, (size_t)vectPersonPoints[i].x ) / 1000.0;
 
       float x = (vectPersonPoints[i].x - cameraPrincipalX)/focalLengthX*depth;
       float y = (vectPersonPoints[i].y - cameraPrincipalY)/focalLengthY*depth;
@@ -240,11 +260,13 @@ int main(int argc, char** argv)
   ros::NodeHandle n("~");
 
   CameraBlobPublisher camera_blob_publisher(n);
+  image_transport::ImageTransport image_transporter(n);
 
   message_filters::Subscriber<yolo2::ImageDetections> detectionSub(n, "/vision/yolo2/detections", 1);
-  message_filters::Subscriber<sensor_msgs::Image> depthSub(n, "/camera/depth_registered/sw_registered/image_rect", 1);
+  image_transport::SubscriberFilter depthSub(image_transporter, "/camera/depth/image_raw", 1);
+  
   typedef message_filters::sync_policies::ApproximateTime<yolo2::ImageDetections, sensor_msgs::Image> SyncPolicy;
-  message_filters::Synchronizer<SyncPolicy> sync(SyncPolicy(10), detectionSub, depthSub);
+  message_filters::Synchronizer<SyncPolicy> sync(SyncPolicy(30), detectionSub, depthSub);
   sync.registerCallback(boost::bind(&CameraBlobPublisher::detectionCallback, &camera_blob_publisher, _1, _2));
 
   ros::spin();
