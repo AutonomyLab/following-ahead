@@ -1,3 +1,9 @@
+#define CAM_WRT_LASER_X -0.075
+#define CAM_WRT_LASER_Y -0.01
+#define CAM_WRT_LASER_Z 0.174
+
+#define CAM_WRT_LASER_PITCH 16.5
+
 #include "ros/ros.h"
 #include "yolo2/ImageDetections.h"
 #include <std_msgs/Bool.h>
@@ -173,7 +179,7 @@ public:
     // undistortedPoints.clear();
     // cv::undistortPoints(vectPersonPoints, undistortedPoints, cameraMatrix, distortionCoeffs);
     
-    pointCloudMsg_->header.frame_id = "world";
+    pointCloudMsg_->header.frame_id = "camera";
     // pointCloudMsg_->height = pointCloudMsg_->width = 1;
     pointCloudMsg_->header.stamp = ros::Time::now();
     pointCloudMsg_->points.clear();
@@ -188,9 +194,13 @@ public:
       float z = depth;
 
       geometry_msgs::Point32 point;
-      point.x = -x;
-      point.y = -z;
-      point.z = -y;
+      // point.x = -x;
+      // point.y = -z;
+      // point.z = -y;
+
+      point.x = x;
+      point.y = y;
+      point.z = z;
 
       pointCloudMsg_->points.push_back(point);
     }
@@ -223,10 +233,10 @@ public:
 
     geometry_msgs::TransformStamped transform_stamped;
     transform_stamped.header.stamp = ros::Time::now();
-    transform_stamped.header.frame_id = "world";
-    transform_stamped.transform.translation.x = -person_x;
-    transform_stamped.transform.translation.y = -person_z;
-    transform_stamped.transform.translation.z = -person_y;
+    transform_stamped.header.frame_id = "camera";
+    transform_stamped.transform.translation.x = person_x;
+    transform_stamped.transform.translation.y = person_y;
+    transform_stamped.transform.translation.z = person_z;
 
     transform_stamped.transform.rotation.x = 0;
     transform_stamped.transform.rotation.y = 0;
@@ -237,18 +247,55 @@ public:
 
     tf::StampedTransform relative_tf;
     relative_tf.child_frame_id_ = "relative_pose"; // source
-    relative_tf.frame_id_ = "world"; // target
+    relative_tf.frame_id_ = "camera"; // target
     relative_tf.stamp_ = transform_stamped.header.stamp;
 
     relative_tf.setOrigin(tf::Vector3( 
       transform_stamped.transform.translation.x, 
       transform_stamped.transform.translation.y, 
-      0
+      transform_stamped.transform.translation.z
     ));
 
     relative_tf.setRotation(tf::Quaternion(0, 0, 0, 1));
 
     tf_broadcaster_.sendTransform(relative_tf);
+
+    // ----------------------- broadcast camera tf wrt world ---------------------------------
+    tf::StampedTransform camera_tf;
+    camera_tf.child_frame_id_ = "camera"; // source
+    camera_tf.frame_id_ = "world"; // target
+    camera_tf.stamp_ = transform_stamped.header.stamp;
+
+    camera_tf.setOrigin(tf::Vector3( 
+      CAM_WRT_LASER_X, 
+      CAM_WRT_LASER_Y, 
+      CAM_WRT_LASER_Z
+    )); 
+
+    float pitch_angle = CAM_WRT_LASER_PITCH * M_PI / 180.;
+    
+    cv::Point3f basis_x(
+      0, 1, 0
+    );
+
+    cv::Point3f basis_z(
+      -cos(pitch_angle),
+      0,
+      sin(pitch_angle)
+    );
+
+    cv::Point3f basis_y = basis_z.cross(basis_x);
+    
+    tf::Quaternion q;
+    tf::Matrix3x3 rotation(
+      basis_x.x, basis_y.x, basis_z.x,
+      basis_x.y, basis_y.y, basis_z.y,
+      basis_x.z, basis_y.z, basis_z.z 
+    );
+    rotation.getRotation(q);
+    camera_tf.setRotation(q);
+
+    tf_broadcaster_.sendTransform(camera_tf);
 
   }
 };
