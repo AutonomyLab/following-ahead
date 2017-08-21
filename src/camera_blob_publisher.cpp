@@ -44,7 +44,7 @@ private:
   sensor_msgs::PointCloud::Ptr pointCloudMsg_;
   ros::NodeHandle nh_;
   tf::TransformBroadcaster tf_broadcaster_;
-
+  cv::Point3f human_prev_pose;
   float camera_wrt_laser_x_;
   float camera_wrt_laser_y_;
   float camera_wrt_laser_z_;
@@ -346,7 +346,7 @@ int main(int argc, char** argv)
   image_transport::SubscriberFilter depthSub(image_transporter, "/camera/depth/image_raw", 1);
   
   typedef message_filters::sync_policies::ApproximateTime<yolo2::ImageDetections, sensor_msgs::Image> SyncPolicy;
-  message_filters::Synchronizer<SyncPolicy> sync(SyncPolicy(30), detectionSub, depthSub);
+  message_filters::Synchronizer<SyncPolicy> sync(SyncPolicy(1000), detectionSub, depthSub);
   sync.registerCallback(boost::bind(&CameraBlobPublisher::detectionCallback, &camera_blob_publisher, _1, _2));
 
   ros::spin();

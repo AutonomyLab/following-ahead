@@ -118,12 +118,16 @@ void Robot::myBlobUpdate(const boost::shared_ptr<const geometry_msgs::TransformS
 {
   current_relative_pose_ = *msg;
 
+  // r0 is the camera frame for real robot and base_link for simulation
   tf::StampedTransform r0_T_map; 
+  tf::StampedTransform base_frame_T_map;
   try
   {
     
-    tf_listener_.lookupTransform(base_frame_, map_frame_,
+    tf_listener_.lookupTransform(current_relative_pose_.header.frame_id, map_frame_,
                                 ros::Time(0), r0_T_map);
+    tf_listener_.lookupTransform(base_frame_, map_frame_,
+                                ros::Time(0), base_frame_T_map);
   }
   catch (tf::TransformException ex)
   {
@@ -132,12 +136,31 @@ void Robot::myBlobUpdate(const boost::shared_ptr<const geometry_msgs::TransformS
     // ros::Duration(1.0).sleep();
   }
 
-  tf::Transform transform_r0_r1;
-  transform_r0_r1.setOrigin( tf::Vector3(current_relative_pose_.transform.translation.x, current_relative_pose_.transform.translation.y, 0.0) );
-  transform_r0_r1.setRotation(r0_T_map.getRotation());
-  tf_broadcaster_.sendTransform(tf::StampedTransform(transform_r0_r1, ros::Time::now(), base_frame_, person_frame_));
-
-  absolute_tf_pose_human_ = r0_T_map.inverse() * transform_r0_r1;
+  tf::Transform transform_r0_human;
+  transform_r0_human.setOrigin( tf::Vector3(
+    current_relative_pose_.transform.translation.x, 
+    current_relative_pose_.transform.translation.y, 
+    current_relative_pose_.transform.translation.z
+  ));
+  transform_r0_human.setRotation(r0_T_map.getRotation());
+  
+  absolute_tf_pose_human_ = r0_T_map.inverse() * transform_r0_human;
+  // project to ground plane
+  absolute_tf_pose_human_.setOrigin(tf::Vector3(
+    absolute_tf_pose_human_.getOrigin().getX(),
+    absolute_tf_pose_human_.getOrigin().getY(),
+    0
+  ));
+  absolute_tf_pose_human_.setRotation(tf::Quaternion(0, 0, 0, 1));
+  
+  tf::Transform transform_base_frame_human = base_frame_T_map * absolute_tf_pose_human_;
+  tf_broadcaster_.sendTransform(
+    tf::StampedTransform(
+      transform_base_frame_human, ros::Time::now(), 
+      base_frame_, 
+      person_frame_
+    )
+  );
 
 }
 
@@ -357,7 +380,6 @@ cv::Point3f Robot::updatePrediction()
 
 void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& msg)
 {
-  ROS_INFO("Odometry callback");
   current_odometry_ = *msg;
 
   // if  ( 
@@ -382,14 +404,16 @@ void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& 
     ROS_ERROR("get_map service call failed!!!");
   }
 
-  human_relative_pose = cv::Point3f(current_relative_pose_.transform.translation.x, current_relative_pose_.transform.translation.y, 0);
-
   tf::StampedTransform r0_T_map; 
+  // relative pose of human wrt robot (base_link)
+  tf::StampedTransform r0_T_r1;
   try
   {
     
     tf_listener_.lookupTransform(base_frame_, map_frame_,
                                 ros::Time(0), r0_T_map);
+    tf_listener_.lookupTransform(base_frame_, person_frame_,
+                                ros::Time(0), r0_T_r1);
   }
   catch (tf::TransformException ex)
   {
@@ -398,6 +422,11 @@ void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& 
     // ros::Duration(1.0).sleep();
   }
 
+  human_relative_pose = cv::Point3f(
+    r0_T_r1.getOrigin().getX(), 
+    r0_T_r1.getOrigin().getY(), 
+    r0_T_r1.getOrigin().getZ()
+  );
   absolute_tf_pose_robot_ = r0_T_map.inverse();
   
   if (!particle_filter_.isInitialized())
@@ -439,15 +468,11 @@ void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& 
     ROS_INFO("EKF initialized");
   }
 
-
-  
-  // THIS IS NOT RIGHT, THE MEASUREMENTS ARE ABSOLUTE POSE, NOT RELATIVE
-  // the z in the relative pose is actually the depth (range). Lol!!!
-  // float human_distance = human_relative_pose.z;
-  // float human_distance_2 = human_distance * human_distance;
-  // // the quaternion x is the bearing angle
-  float bearing_angle = current_relative_pose_.transform.rotation.x;
-  float bearing_range = current_relative_pose_.transform.translation.z;
+  float bearing_angle = atan2(human_relative_pose.y, -human_relative_pose.x);
+  float bearing_range = sqrt(
+    pow(human_relative_pose.x, 2) +
+    pow(human_relative_pose.y, 2)
+  );
 
   tf::Transform map_T_r0 = r0_T_map.inverse();
   float robot_orientation = tf::getYaw(map_T_r0.getRotation());
@@ -622,11 +647,6 @@ void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& 
       color.values.push_back((float)rand()/RAND_MAX*255);
       color.values.push_back(0.0);
       color.values.push_back(0.0);
-
-      if (fabs(point.x) < 0.001 && fabs(point.y) < 0.001)
-      {
-         ROS_INFO("Particle %d at origin weight:%f ", i, point.z);
-      }
     }
     
     pub_particles_.publish(particles);

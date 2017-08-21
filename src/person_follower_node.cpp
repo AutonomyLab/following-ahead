@@ -240,7 +240,7 @@ int main(int argc, char** argv )
   // sync.registerCallback(boost::bind(&detectionCallback, _1, _2));
   // ros::Subscriber detection_sub = n.subscribe("/vision/yolo2/detections", 10, detectionCallback);
 
-  pubPointCloud =  n.advertise<sensor_msgs::PointCloud>("person_cloud", 1);
+  // pubPointCloud =  n.advertise<sensor_msgs::PointCloud>("person_cloud", 1);
   
   ros::Subscriber joy_sub = n.subscribe("/teleop/joy", 1, &Robot::joyCallback, &myRobot);  
   ros::Subscriber groundtruth_sub = n.subscribe("/person_follower/groundtruth_pose", 1, &Robot::myBlobUpdate, &myRobot);

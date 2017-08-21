@@ -4,7 +4,7 @@
 	<arg name="odom_frame" default="robot_0/odom" />
 	<arg name="map_frame" default="map" />
 	<arg name="use_deadman" default="false" />
-	<arg name="person_frame" default="robot_1/base_footprint" />
+	<arg name="person_frame" default="person_raw" />
 
 
 	<param name="/use_sim_time" value="true"/>
@@ -15,7 +15,9 @@
 		<remap from="/robot_0/cmd_vel" to="/cmd_vel" />
 	</node>
 	
-	<node pkg="person_follower" type="simulation_interface_node" name="simulation_interface_node" output="screen" />
+	<node pkg="person_follower" type="simulation_interface_node" name="simulation_interface_node" output="screen">
+		<param name="base_frame" value="$(arg base_frame)" />
+	</node>
 
 	<node pkg="person_follower" type="person_follower_node" name="person_follower_node" output="screen">
 		<param name="base_frame" value="$(arg base_frame)" />

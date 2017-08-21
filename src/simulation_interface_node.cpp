@@ -30,6 +30,11 @@ public:
 
 		sub_robot_pose_ = nh_.subscribe("/robot_0/base_pose_ground_truth", 1, &SimulationInterface::robotPoseCallback, this);
 		sub_person_pose_ = nh_.subscribe("/robot_1/base_pose_ground_truth", 1, &SimulationInterface::personPoseCallback, this);
+		
+		if (!nh_.getParam("base_frame", base_frame_))
+		{
+			base_frame_ = "robot_0/base_link";
+		}
 	}
 
 	double getBlobBearing(double blobCoord, double imageWidth)
@@ -122,7 +127,7 @@ public:
 		
 		geometry_msgs::TransformStamped msg;
 		msg.header.stamp = blobMsg->header.stamp;
-
+		msg.header.frame_id = base_frame_;
 		msg.transform.translation.x = relative_x_est;
 		msg.transform.translation.y = relative_y_est;
 		// the z is range
@@ -157,6 +162,7 @@ protected:
 	ros::Subscriber sub_person_pose_;
 	cv::Point3f robot_pose_;
 	cv::Point3f person_pose_;
+	std::string base_frame_;
 };
 
 
