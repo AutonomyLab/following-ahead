@@ -382,6 +382,13 @@ void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& 
 {
   current_odometry_ = *msg;
 
+  if (current_relative_pose_.header.stamp.toSec() <= previous_relative_pose_.header.stamp.toSec())
+  {
+    // no new blob measurement, just go to the last destination
+    //?
+    return;
+  }
+  previous_relative_pose_ = current_relative_pose_;
   // if  ( 
   //       fabs(
   //         current_odometry_.header.stamp.toSec() - current_relative_pose_.header.stamp.toSec()

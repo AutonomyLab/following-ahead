@@ -41,6 +41,7 @@
 #define BLOB_NOISE_STDDEV_X 0.1
 #define BLOB_NOISE_STDDEV_Y 0.1
 
+#define DEPTH_LIMIT_TRACKING 0.5
 
 // Kalman filter index:
 #define X_T_IDX 0
@@ -51,7 +52,7 @@
 #define THETA_IDX 5
 // Infinite impulse response (IIR) filter for velocity and orientation
 // higher these values, more importance to the new readings
-#define VEL_IIR_ALPHA 0.1
+#define VEL_IIR_ALPHA 0.3
 #define THETA_IIR_ALPHA 0.01
 
 // process noise during the prediction step of EKF

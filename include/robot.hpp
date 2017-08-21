@@ -74,6 +74,7 @@ private:
 
     nav_msgs::Odometry current_odometry_;
     geometry_msgs::TransformStamped current_relative_pose_;
+    geometry_msgs::TransformStamped previous_relative_pose_;
     tf::Transform absolute_tf_pose_human_;
     tf::Transform absolute_tf_pose_robot_;
 

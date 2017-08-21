@@ -75,7 +75,7 @@
 	<node pkg="teleop_twist_joy" type="teleop_node" name="teleop_node">
 		<remap from="joy" to="teleop/joy" />
 		<remap from="cmd_vel" to="robot_1/cmd_vel" />
-		<param name="scale_linear" value="0.25" />
+		<param name="scale_linear" value="0.75" />
 		<param name="scale_angular" value="0.5" />
 	</node>
 </launch>

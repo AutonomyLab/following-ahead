@@ -44,12 +44,12 @@ private:
   sensor_msgs::PointCloud::Ptr pointCloudMsg_;
   ros::NodeHandle nh_;
   tf::TransformBroadcaster tf_broadcaster_;
-  cv::Point3f human_prev_pose;
+  cv::Point3f human_prev_pose_;
   float camera_wrt_laser_x_;
   float camera_wrt_laser_y_;
   float camera_wrt_laser_z_;
   float camera_wrt_laser_pitch_;
-
+  bool track_person_;
   std::string camera_parent_frame_;
 
 public:
@@ -57,6 +57,7 @@ public:
     : nh_(n),
       pointCloudMsg_(new sensor_msgs::PointCloud)
   {
+    track_person_ = false;
     pubPointCloud_ =  nh_.advertise<sensor_msgs::PointCloud>("person_cloud", 1);
     pubRelativePose_ = nh_.advertise<geometry_msgs::TransformStamped>("/person_follower/groundtruth_pose", 1);
   
@@ -106,11 +107,11 @@ public:
         continue;
       }
 
-      if (vectPersonPoints.size())
-      {
-        // another person, don't care
-        break;
-      }
+      // if (vectPersonPoints.size())
+      // {
+      //   // another person, don't care
+      //   break;
+      // }
       
       // Stg::ModelBlobfinder  myFinder;
       // std::cout << detectionMsg->detections[i].class_id << std::endl;
@@ -182,6 +183,30 @@ public:
 
       vectPersonPoints = vectPersonPointsSegmented;
       depthValues = depthValuesSegmented;
+
+      if (vectPersonPoints.size()==0)
+      {
+        continue;
+      }
+
+      if (track_person_)
+      {  
+        if ( fabs(fabs(human_prev_pose_.z) - fabs(medianDepth)) < DEPTH_LIMIT_TRACKING )
+        {
+          human_prev_pose_.z =  medianDepth;
+          break;
+        }
+        else
+        {
+          continue;
+        }
+      }
+      else
+      {
+        // TODO: something better
+        continue;
+      }
+
     }
 
     // cv::imshow("window", matPersonSegmented);
@@ -190,8 +215,14 @@ public:
     if (vectPersonPoints.size()==0)
     {
       ROS_WARN("No detection");
+      track_person_ = false;
       return;
     }
+    else
+    {
+      track_person_ = true;
+    }
+
 
     // cv::Mat cameraMatrix = cv::Mat::eye(3, 3, CV_32F);
     // cameraMatrix.at<float>(0, 0) = focalLengthX;
@@ -263,7 +294,7 @@ public:
     float person_x = (min_x + max_x) / 2.0;
     person_x = (person_x - cameraPrincipalX)/focalLengthX*person_z;
     float person_y = 0;
-
+    human_prev_pose_ = cv::Point3f(person_x,person_y,person_z);
     geometry_msgs::TransformStamped transform_stamped;
     transform_stamped.header.stamp = ros::Time::now();
     transform_stamped.header.frame_id = "camera";
