@@ -70,6 +70,11 @@ public:
    */
   bool isInitialized() { return initialized; }
 
+  /**
+   * Reintialize the filter
+   */
+  void reintialize() { initialized = false; }
+
   cv::Mat getStateErrorCovariance() { return P; }
 
 private:

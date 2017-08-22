@@ -44,6 +44,11 @@ public:
 				float orientation, float orientation_stddev	);
 
 	bool isInitialized() { return is_initialized_; }
+	/**
+	 * Reintialize the filter
+	 */
+	void reintialize() { is_initialized_ = false; }
+
 	size_t getNumPredictionParticles() { return num_particles_; }
 
 	// float p_measurement_given_state(	cv::Point3f current_target_position, cv::Point3f current_target_position_stddev, 

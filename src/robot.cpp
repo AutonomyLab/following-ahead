@@ -16,16 +16,8 @@
 #include "utils.hpp"
 
 #include <set>
+#include <exception>
 
-cv::Point3f Robot::getRobotPose()
-{
-	return robot_poses->getFilter();
-}	
-
-cv::Point3f Robot::getHumanPose()
-{
-	return human_poses->getFilter();
-}
 
 Robot::Robot( ros::NodeHandle n,
               std::string base_frame, std::string odom_frame, 
@@ -34,7 +26,6 @@ Robot::Robot( ros::NodeHandle n,
     map_frame_(map_frame), person_frame_(person_frame), use_deadman_(use_deadman),
     image_transport_(n)
 {
-
   cv::Mat Q = cv::Mat::zeros(NUM_STATES, NUM_STATES, CV_32F);
   Q.at<float>(X_T_IDX, X_T_IDX) = X_T_PROCESS_NOISE_VAR;
   Q.at<float>(Y_T_IDX, Y_T_IDX) = Y_T_PROCESS_NOISE_VAR;
@@ -70,8 +61,6 @@ Robot::Robot( ros::NodeHandle n,
   }
 
   // odom_sub_.subscribe(n, "/husky/odom", 1);
-  // tf_filter_ = new tf::MessageFilter<nav_msgs::Odometry>(odom_sub_, tf_listener_, map_frame_, 1);
-  // tf_filter_->registerCallback( boost::bind(&Robot::odometryCallback, this, _1) );  
 
   odom_topic_subscriber_ = n.subscribe("/husky/odom", 1, &Robot::odometryCallback, this);
   map_image_pub_ = image_transport_.advertise("map_image", 1);
@@ -84,9 +73,6 @@ Robot::Robot( ros::NodeHandle n,
   else
     isDeadManActive = true;
 
-	robot_poses = new Filter(ROBOT_FILTER_SIZE);
-	human_poses = new Filter(PERSON_FILTER_SIZE);
-	destination_pose = new Filter(DESTINATION_FILTER_SIZE);
 	human_prev_pose = cv::Point3f(0,0,0);
   human_relative_pose = cv::Point3f(0,0,0);
   human_prev_vel = cv::Point3f(0,0,0);
@@ -97,11 +83,24 @@ Robot::Robot( ros::NodeHandle n,
   referenceLastUpdated = 0;
 	pid_turn.set(AVOID_TURN, -AVOID_TURN, AVOID_TURN, 0.0100, 0.01);
   pid_cruse.set(CRUISE_SPEED, -CRUISE_SPEED, -CRUISE_SPEED  , .0100, 0.001);
+
+  // zero time indicates invalid pose
+  current_relative_pose_.header.stamp = ros::Time(0);
+  previous_relative_pose_.header.stamp = ros::Time(0);
 }
 
 Robot::~Robot()
 {
   delete move_base_client_ptr_;
+}
+
+void Robot::publishZeroCmdVel()
+{
+  geometry_msgs::Twist cmd_vel;
+  cmd_vel.linear.x = 0;
+  cmd_vel.linear.z = 1; // make it fly :)
+  cmd_vel.angular.z = 0;
+  cmd_vel_publisher.publish(cmd_vel);
 }
 
 void Robot::joyCallback(const sensor_msgs::Joy& msg)
@@ -203,54 +202,6 @@ int Robot::calculateDistination(cv::Point3f& avg_dest)
 }
 
 
-int Robot::publishCmdVel(cv::Point3f destination)
-{
-	cv::Point3f robot_pose = robot_poses->getFilter();
-  if ((destination.x - robot_pose.x)==0) // Avoid devide by 0
-    return 0;
-  double m = (destination.y - robot_pose.y) / (destination.x - robot_pose.x);
-  double degreeD = atan(m);
-
-  if (destination.x < robot_pose.x && destination.y > robot_pose.y  )
-    degreeD = M_PI + degreeD;  
-  else if (destination.x < robot_pose.x && destination.y < robot_pose.y  )
-    degreeD = -M_PI + degreeD;
-
-  if (abs(degreeD -robot_prev_degree_dest) >= 180){
-    // std::cout << "degreed + .: " << degreeD -robot_prev_degree_dest <<std::endl;
-    degreeD = robot_prev_degree_dest;
-  }
-  robot_prev_degree_dest = degreeD;
-  // std::cout << "m: "<< m << "atan: " <<  degreeD*180 / M_PI << std::endl;
-  
-  double Dturn = robot_pose.z - degreeD;
-
-  if (Dturn >= M_PI)
-    Dturn -= M_PI*2;
-  else if (Dturn <= -M_PI)
-     Dturn += M_PI*2;
-  // std::cout << "dturn: " << Dturn << std::endl;
-  //set turn speed
-  if (!isDeadManActive)
-    return 0;
-  double Tspeed = pid_turn.calculate( 0 ,  Dturn , 0.01 );
-  // std::cout << "Tspeed: " << Tspeed << std::endl;
-
-  double distance = sqrt(pow(destination.x- robot_pose.x, 2) +  pow(destination.y - robot_pose.y, 2));
-  double Xspeed = pid_cruse.calculate(0 ,distance, 0.01 );
-
-  geometry_msgs::Twist cmd_vel_msg; 
-  cmd_vel_msg.linear.x = Xspeed;
-  cmd_vel_msg.angular.z = Tspeed; // Tspeed;
-
-  
-  robot_prev_cmd_vel.x = Xspeed;
-  robot_prev_cmd_vel.z = Tspeed;
-
-  cmd_vel_publisher.publish(cmd_vel_msg);
-  return 0; 
-}
-
 void Robot::mapCallback(nav_msgs::OccupancyGrid &map_msg)
 {
   map_image_ = cv::Mat(map_msg.info.width, map_msg.info.height, CV_8UC1, (void*)map_msg.data.data());
@@ -322,6 +273,8 @@ cv::Point3f Robot::updatePrediction()
     cv::Point(round(prediction_image_coordinates.x), round(prediction_image_coordinates.y))
   );
 
+  cv::Mat debug_map = map_image_.clone();
+  
   bool is_robot_to_prediction_feasible = true;
   cv::LineIterator it = robot_prediction_line_iterator;
   for (size_t i = 0; i < robot_prediction_line_iterator.count; i++, it++)
@@ -337,21 +290,33 @@ cv::Point3f Robot::updatePrediction()
   {
     // don't update the prediction
     prediction_global_prev_ = prediction_global_;
-    return prediction_global_;
+    cv::circle(debug_map, person_image_coordinates, 8, 255);
+    cv::circle(debug_map, prediction_image_coordinates, 5, 255);
   }
-
-  cv::Point new_person_image_coordinates, new_prediction_image_coordinates;
-  cv::Mat debug_map;
-  
-  if (person_motion_model_.updatePrediction(   
-    map_image_, map_occupancy_grid_.info.resolution,
-    person_image_coordinates, prediction_image_coordinates, PREDICTION_LOOKAHEAD_DISTANCE, 
-    new_person_image_coordinates, new_prediction_image_coordinates,
-    debug_map
-  ) == 1)
+  else
   {
-    ROS_ERROR("updatePrediction failed");
-    return prediction_global_prev_;
+    cv::Point new_person_image_coordinates, new_prediction_image_coordinates;
+    
+    if (person_motion_model_.updatePrediction(   
+      map_image_, map_occupancy_grid_.info.resolution,
+      person_image_coordinates, prediction_image_coordinates, PREDICTION_LOOKAHEAD_DISTANCE, 
+      new_person_image_coordinates, new_prediction_image_coordinates,
+      debug_map
+    ) == 1)
+    {
+      ROS_ERROR("updatePrediction failed");
+      return prediction_global_prev_;
+    }
+    // account for map orientation
+    float orientation = atan2(
+      new_prediction_image_coordinates.y - new_person_image_coordinates.y,
+      new_prediction_image_coordinates.x - new_person_image_coordinates.x
+    );
+    prediction_global_prev_ = cv::Point3f(
+                                new_prediction_image_coordinates.x * map_occupancy_grid_.info.resolution + (int)map_occupancy_grid_.info.origin.position.x,
+                                new_prediction_image_coordinates.y * map_occupancy_grid_.info.resolution + (int)map_occupancy_grid_.info.origin.position.y,
+                                orientation
+                              );
   }
 
   cv::Mat debug_map_flipped;
@@ -364,31 +329,38 @@ cv::Point3f Robot::updatePrediction()
 
   map_image_pub_.publish(cv_ptr.toImageMsg()); 
 
-  // account for map orientation
-  float orientation = atan2(
-    new_prediction_image_coordinates.y - new_person_image_coordinates.y,
-    new_prediction_image_coordinates.x - new_person_image_coordinates.x
-  );
-  prediction_global_prev_ =  
-                          cv::Point3f(
-                            new_prediction_image_coordinates.x * map_occupancy_grid_.info.resolution + (int)map_occupancy_grid_.info.origin.position.x,
-                            new_prediction_image_coordinates.y * map_occupancy_grid_.info.resolution + (int)map_occupancy_grid_.info.origin.position.y,
-                            orientation
-                          );
-  return prediction_global_prev_;
+    
+    return prediction_global_prev_;
 }
 
-void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& msg)
+void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& msg) try
 {
   current_odometry_ = *msg;
+  float dt = current_relative_pose_.header.stamp.toSec() - previous_relative_pose_.header.stamp.toSec();
 
-  if (current_relative_pose_.header.stamp.toSec() <= previous_relative_pose_.header.stamp.toSec())
+  if (
+        current_relative_pose_.header.stamp.toSec() &&  // is valid
+        previous_relative_pose_.header.stamp.toSec() && // is valid
+        current_relative_pose_.header.stamp.toSec() <= previous_relative_pose_.header.stamp.toSec()
+      )
   {
     // no new blob measurement, just go to the last destination
     //?
-    return;
+
+    cv::Mat state = person_kalman_->state();
+    ROS_WARN("person speed: %f theta: %f", state.at<float>(VEL_IDX, 0),  state.at<float>(THETA_IDX, 0) * 180 / M_PI );
+    throw OdometryException();
+
   }
-  previous_relative_pose_ = current_relative_pose_;
+
+  // if the time between current and previous is too large (when we lose the person), reinitialize the filters 
+  if (dt > MAX_DEL_TIME)
+  {
+    ROS_WARN("dt (%f) large for filter: reinitializing", dt);
+    person_kalman_->reintialize();
+    prediction_particle_filter_.reintialize();
+  }
+
   // if  ( 
   //       fabs(
   //         current_odometry_.header.stamp.toSec() - current_relative_pose_.header.stamp.toSec()
@@ -398,7 +370,6 @@ void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& 
   //   // blob not updated, so return
   //   return;
   // }
-
   nav_msgs::GetMap get_map_srv;
   
   if (map_service_client_.call(get_map_srv))
@@ -425,7 +396,7 @@ void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& 
   catch (tf::TransformException ex)
   {
     ROS_ERROR("TF error %s", ex.what());
-    return;
+    throw OdometryException();
     // ros::Duration(1.0).sleep();
   }
 
@@ -435,21 +406,6 @@ void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& 
     r0_T_r1.getOrigin().getZ()
   );
   absolute_tf_pose_robot_ = r0_T_map.inverse();
-  
-  if (!particle_filter_.isInitialized())
-  {
-    particle_filter_.init(
-      NUM_PARTICLES, BLOB_NOISE_STDDEV_X, BLOB_NOISE_STDDEV_Y, PARTICLE_STOCHASTIC_VELOCITY_STDDEV,
-      human_relative_pose, r0_T_map,
-      base_frame_, map_frame_ 
-    );
-  }
-  else
-  {
-    // update the damn particles here based on measurement
-    particle_filter_.update(human_relative_pose, r0_T_map);
-  }
-
 
   cv::Point3f robot_pose;
   cv::Mat state = person_kalman_->state();
@@ -461,20 +417,65 @@ void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& 
   y.at<float>(0, 0) = human_global_pose.x;
   y.at<float>(1, 0) = human_global_pose.y;
 
+  bool isKalmanValid = true;
   if (!person_kalman_->isInitialized())
   {
-    cv::Mat initState = cv::Mat::zeros(NUM_STATES, 1, CV_32F);
-    initState.at<float>(X_T_IDX, 0) = human_global_pose.x;
-    initState.at<float>(Y_T_IDX, 0) = human_global_pose.y;
-    initState.at<float>(X_T_1_IDX, 0) = human_global_pose.x;
-    initState.at<float>(Y_T_1_IDX, 0) = human_global_pose.y;
-    initState.at<float>(VEL_IDX, 0) = 0;
-    initState.at<float>(THETA_IDX, 0) = 0;
+    // check if both the poses are valid
+    if (
+          current_relative_pose_.header.stamp.toSec() &&
+          previous_relative_pose_.header.stamp.toSec()
+        )
+    {  
+      // check if the person has actually moved
+      float person_movement = sqrt(
+        pow(absolute_tf_pose_human_.getOrigin().getX() - absolute_tf_pose_human_previous_.getOrigin().getX(), 2) +
+        pow(absolute_tf_pose_human_.getOrigin().getY() - absolute_tf_pose_human_previous_.getOrigin().getY(), 2)
+      );
 
-    person_kalman_->init(0, initState);
-    ROS_INFO("EKF initialized");
+      if (person_movement >= DISTANCE_EPSILON)
+      {
+        float theta = atan2(
+          absolute_tf_pose_human_.getOrigin().getY() - absolute_tf_pose_human_previous_.getOrigin().getY(),
+          absolute_tf_pose_human_.getOrigin().getX() - absolute_tf_pose_human_previous_.getOrigin().getX()
+        );
+        float velocity = fabs(person_movement / dt);
+        
+        cv::Mat initState = cv::Mat::zeros(NUM_STATES, 1, CV_32F);
+        initState.at<float>(X_T_IDX, 0) = absolute_tf_pose_human_.getOrigin().getX();
+        initState.at<float>(Y_T_IDX, 0) = absolute_tf_pose_human_.getOrigin().getY();
+        initState.at<float>(X_T_1_IDX, 0) = absolute_tf_pose_human_previous_.getOrigin().getX();
+        initState.at<float>(Y_T_1_IDX, 0) = absolute_tf_pose_human_previous_.getOrigin().getY();
+        initState.at<float>(VEL_IDX, 0) = velocity;
+        initState.at<float>(THETA_IDX, 0) = theta;
+
+        person_kalman_->init(0, initState);
+        ROS_INFO("EKF initialized");
+        ROS_INFO(
+          "start state: speed- %f, theta- %f", 
+          initState.at<float>(VEL_IDX, 0),
+          initState.at<float>(THETA_IDX, 0)
+        );
+      }
+      else
+      {
+        isKalmanValid = false;
+      }
+    }
+    else
+    {
+      isKalmanValid = false;
+    }
   }
+  
 
+  previous_relative_pose_ = current_relative_pose_;
+  absolute_tf_pose_human_previous_ = absolute_tf_pose_human_;
+  
+  if (!isKalmanValid)
+  {
+    throw OdometryException();
+  }
+  
   float bearing_angle = atan2(human_relative_pose.y, -human_relative_pose.x);
   float bearing_range = sqrt(
     pow(human_relative_pose.x, 2) +
@@ -527,7 +528,7 @@ void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& 
   R.at<float>(0, 0) += 0.01;
   R.at<float>(1, 1) += 0.01;
 
-  person_kalman_->update(y, LOOP_TIME, R);
+  person_kalman_->update(y, dt, R);
   cv::Mat new_state = person_kalman_->state();
 
   // TODO: MAKE THE TFs ROS PARAM!!!
@@ -561,7 +562,7 @@ void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& 
   else
   {
     ROS_ERROR("Kalman filter returned NaN position");
-    return;
+    throw OdometryException();
   }
 
   if (!std::isnan(est_theta))
@@ -574,7 +575,7 @@ void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& 
   {
     person_kalman_transform.setRotation(tf::Quaternion(0, 0, 0, 1));
     ROS_ERROR("Kalman filter returned NaN orientation");
-    return;
+    throw OdometryException();
   }
 
   tf_broadcaster_.sendTransform(person_kalman_transform);
@@ -602,7 +603,8 @@ void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& 
   float target_y_stddev = sqrt(person_error_covariance.at<float>(Y_T_IDX, Y_T_IDX));
   // tell the robot to go to the predicted position
   if (
-    true // est_v > DISTANCE_EPSILON/10
+    // true 
+    est_v > DISTANCE_EPSILON/10
     // theta_stddev < ORIENTATION_ERROR_EPSILON
     // velocity_stddev < VELOCITY_ERROR_EPSILON &&
     // target_x_stddev < POSITION_ERROR_EPSILON &&
@@ -629,7 +631,7 @@ void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& 
         target_position, target_position_stddev, 
         est_v, velocity_stddev,
         est_theta, theta_stddev,
-        LOOP_TIME
+        dt
       );
     }
 
@@ -685,7 +687,7 @@ void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& 
     if (
       // true
       isDeadManActive && 
-      fabs(prediction_angle) < 145. * M_PI / 180.  // don't follow if robot is behind
+      fabs(prediction_angle) < 120. * M_PI / 180.  // don't follow if robot is behind
     )
     {
       if (ros::Time::now().toSec() - nav_goal_last_sent > 1.0)
@@ -709,42 +711,24 @@ void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& 
     else // if (!isDeadManActive)
     {
       // cancel anything that's going on
-      geometry_msgs::Twist cmd_vel;
-      cmd_vel.linear.x = 0;
-      cmd_vel.linear.z = 1; // make it fly :)
-      cmd_vel.angular.z = 0;
-      cmd_vel_publisher.publish(cmd_vel);
+      ROS_WARN("deadman off or prediction behind, reinitializing");
+      person_kalman_->reintialize();
+      prediction_particle_filter_.reintialize();
+      throw OdometryException();
     }
   }
   else
   {
-    ROS_WARN(
-      "High error: %f, %f, %f, %f", 
-      velocity_stddev, theta_stddev, target_x_stddev, target_y_stddev
-    );
+    // ROS_WARN(
+    //   "High error: %f, %f, %f, %f", 
+    //   velocity_stddev, theta_stddev, target_x_stddev, target_y_stddev
+    // );
   }
-
-  // // ROS_INFO("Robot Pose: %f, %f, %f", robot_pose.x, robot_pose.y, robot_pose.z);
-  // cv::Point3f avg_dest = destination_pose->getFilter();
-
-  // transform.setOrigin( tf::Vector3(avg_dest.x, avg_dest.y, 0.0) );
-  // q.setRPY(0, 0, avg_dest.z);
-  // transform.setRotation(q);
-  // tf_broadcaster_.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "local_frame", "destination"));
-
-  // transform.setOrigin( tf::Vector3(state.at<float>(5, 0), state.at<float>(6, 0), 0.0) );
-  // q.setRPY(0, 0, 0);
-  // transform.setRotation(q);
-  // tf_broadcaster_.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "local_frame", "person"));
-
-  // cv::Point3f avgDestinations;
-  // if (calculateDistination(avgDestinations))
-  // {
-  //   ROS_ERROR("calculation error");
-  //   return;
-  // }
-
-  // publishCmdVel(avgDestinations);
   
+}
+catch(OdometryException &e)
+{
+  if (!isDeadManActive)
+    publishZeroCmdVel();
 }
 

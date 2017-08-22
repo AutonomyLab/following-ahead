@@ -2,6 +2,8 @@
 #define ROBOT_HPP
 
 #include "filter.hpp"
+#include <exception>
+
 #include "pid.h"
 #include <opencv2/core.hpp>
 #include <opencv2/opencv.hpp>
@@ -42,9 +44,6 @@ private:
     
     tf::TransformListener listener;
     int referenceLastUpdated;
-    Filter* robot_poses;
-    Filter* human_poses;
-    Filter* destination_pose;
     ros::Publisher pub_waypoints_;
     ros::Publisher pub_particles_;
     double robot_prev_degree_dest;
@@ -58,7 +57,6 @@ private:
     PID pid_cruse;
     bool isDeadManActive;
 
-    ParticleFilter particle_filter_;
     PredictionParticleFilter prediction_particle_filter_;
     PersonKalman *person_kalman_;
     
@@ -76,6 +74,8 @@ private:
     geometry_msgs::TransformStamped current_relative_pose_;
     geometry_msgs::TransformStamped previous_relative_pose_;
     tf::Transform absolute_tf_pose_human_;
+    tf::Transform absolute_tf_pose_human_previous_;
+
     tf::Transform absolute_tf_pose_robot_;
 
     std::string base_frame_;
@@ -106,8 +106,6 @@ public:
     
     void joyCallback(const sensor_msgs::Joy& msg);
     void odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& msg);
-    cv::Point3f getRobotPose();
-    cv::Point3f getHumanPose();
     void myBlobUpdate (const boost::shared_ptr<const geometry_msgs::TransformStamped>& msg);
     int relativePoseCallback();
     void mapCallback(nav_msgs::OccupancyGrid &map_msg);
@@ -115,7 +113,13 @@ public:
 
     int kiniectPoseCallback();
     int calculateDistination(cv::Point3f&);
-    int publishCmdVel(cv::Point3f destination);
+
+    void publishZeroCmdVel();
+
+    class OdometryException: public std::exception
+    {
+
+    };
 };
 
 

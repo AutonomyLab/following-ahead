@@ -9,8 +9,9 @@ GlobalPlanner:
   default_tolerance: 0.5
   # visualize_potential: true 
   old_navfn_behavior: false
-  use_quadratic: false
-  # use_dijkstra: false
+  use_quadratic: true
+  use_grid_path: false
+  use_dijkstra: true
   
 
 #Independent settings for the planner's costmap
@@ -20,4 +21,6 @@ global_costmap:
   update_frequency: 10.0
   publish_frequency: 10.0
   static_map: true
+  width: 100.0
+  height: 100.0
   rolling_window: true

@@ -3,7 +3,7 @@
 
 #include <cmath>
 
-#define DISTANCE_EPSILON 0.01
+#define DISTANCE_EPSILON 0.04
 #define VELOCITY_ERROR_EPSILON 1.0
 #define POSITION_ERROR_EPSILON 1.0
 #define ORIENTATION_ERROR_EPSILON 1.5
@@ -12,6 +12,7 @@
 #define ROBOT_FILTER_SIZE 1
 #define DESTINATION_FILTER_SIZE 30
 #define LOOP_TIME 0.1
+#define MAX_DEL_TIME 1.0
 #define BLOB_UPDATE_TIME 1./120
 #define NUM_UPDATE_REF_FRAME 300
 
@@ -53,7 +54,7 @@
 // Infinite impulse response (IIR) filter for velocity and orientation
 // higher these values, more importance to the new readings
 #define VEL_IIR_ALPHA 0.3
-#define THETA_IIR_ALPHA 0.01
+#define THETA_IIR_ALPHA 0.1 // 0.01
 
 // process noise during the prediction step of EKF
 #define X_T_PROCESS_NOISE_VAR 0.01
@@ -85,7 +86,7 @@
 #define ROBOT_VELOCITY_VARIANCE_SCALING 0.5
 
 // lookahead distance (m) for prediction
-#define PREDICTION_LOOKAHEAD_DISTANCE 2.0
+#define PREDICTION_LOOKAHEAD_DISTANCE 5.0
 
 // maximum orientation change between two iterations (used for calculating probability of the measurement)
 #define MAX_DEL_THETA 0.17453292519943295 // 10 degrees
@@ -106,7 +107,7 @@
 #define OBSTACLE_INFLATION 0.35
 #define DESTINATION_EXTENTION_PERCENTAGE 1.2
 
-#define FOV 180.0
+#define FOV 70.0
 
 static const float g_fov = FOV*M_PI/180.0;
 static const float focalLengthX = 300.4547119140625;
