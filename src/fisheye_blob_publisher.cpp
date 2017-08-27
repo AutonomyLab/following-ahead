@@ -23,6 +23,7 @@
 #include <geometry_msgs/Point32.h>
 #include <geometry_msgs/TransformStamped.h>
 #include <sensor_msgs/LaserScan.h>
+#include <people_msgs/PositionMeasurement.h>
 #include <ros/package.h>
 
 #include "robot.hpp"
@@ -46,6 +47,9 @@ class FisheyeBlobPublisher
 private:
   ros::Publisher pubPointCloud_;
   ros::Publisher pubRelativePose_;
+  ros::Publisher pubPositionMeasurementSeeds_;
+  ros::Publisher pubFilteredLaser_;
+
   sensor_msgs::PointCloud::Ptr pointCloudMsg_;
   ros::NodeHandle nh_;
   tf::TransformBroadcaster tf_broadcaster_;
@@ -112,11 +116,13 @@ public:
       image_transport_(n)
   {
     track_person_ = false;
+    
     pubPointCloud_ =  nh_.advertise<sensor_msgs::PointCloud>("person_cloud", 1);
     pubRelativePose_ = nh_.advertise<geometry_msgs::TransformStamped>("/person_follower/groundtruth_pose", 1);
-
+    pubPositionMeasurementSeeds_ = nh_.advertise<people_msgs::PositionMeasurement>("/people_tracker_filter", 1);
+    pubFilteredLaser_ = nh_.advertise<sensor_msgs::LaserScan>("/scan_filtered", 1);
     pub_undistorted_image_ = image_transport_.advertise("/camera/fisheye/undistorted", 1);
-  
+    
     nh_.param("camera_wrt_laser_x", camera_wrt_laser_x_, (float)CAM_WRT_LASER_X);
     nh_.param("camera_wrt_laser_y", camera_wrt_laser_y_, (float)CAM_WRT_LASER_Y);
     nh_.param("camera_wrt_laser_z", camera_wrt_laser_z_, (float)CAM_WRT_LASER_Z);
@@ -164,10 +170,14 @@ public:
     {
       return;
     }
+
     ROS_INFO("callback");
     std::vector<cv::Point2f> undistortedPoints;
     std::vector<float> depthValues;
     std::vector<cv::Point2f> vectPersonPoints;
+
+    people_msgs::PositionMeasurement leg_detector_seeds;
+    sensor_msgs::LaserScan laserMsgFiltered = *laserMsg;
 
     // bearing angles of endpoints
     double end_bearing_angles[2];
@@ -175,6 +185,14 @@ public:
     
     cv_bridge::CvImageConstPtr cv_ptr;
     cv_ptr = cv_bridge::toCvShare(imageMsg);
+    
+    ros::Time send_time = ros::Time::now();
+    
+    laserMsgFiltered.header.stamp = send_time;
+    std::fill(laserMsgFiltered.ranges.begin(), laserMsgFiltered.ranges.end(), laserMsgFiltered.range_max);
+    // leg_detector_seeds.header.stamp = send_time;
+    // leg_detector_seeds.header.frame_id = camera_parent_frame_;
+
     ROS_INFO("IMAGE");
 
     for (uint32_t detection_idx=0; detection_idx<detectionMsg->detections.size(); detection_idx++)
@@ -238,19 +256,6 @@ public:
           laser_bearing.x
         );
 
-        // end_bearing_angles[i] = atan2(
-        //   point3D[1],
-        //   point3D[2]
-        // );
-
-        // std::cout << "camera angle: " << atan2(
-        //   point3D[1],
-        //   point3D[2]
-        // ) * 180 / M_PI;
-
-        // std::cout << "camera bearing: " << camera_bearing << std::endl;
-        // std::cout << "laser bearing: " << laser_bearing << std::endl;
-
         std::cout << "bearing angle: " << end_bearing_angles[i] * 180 / M_PI << std::endl;
       }
       
@@ -277,44 +282,11 @@ public:
       // check depth based on laser
       for (size_t i = laser_start_idx; i < laser_end_idx; i++)
       {
-        float depth = laserMsg->ranges[i];
-        if (depth < 0.01 || depth > 3.5 || !std::isfinite(depth))
-        {
-          continue;
-        }
-
-        depthValues.push_back(depth);
+        laserMsgFiltered.ranges[i] = laserMsg->ranges[i];
       }
-
-      if (depthValues.size() == 0)
-      {
-        ROS_WARN("No point in person: %d", detection_idx);
-        continue;
-      }
-
-      size_t medianIdx = depthValues.size()/2;
-      std::nth_element(depthValues.begin(), depthValues.begin()+medianIdx, depthValues.end());
-      float medianDepth = depthValues[medianIdx];
-
-      std::vector<float> depthValuesSegmented;
-
-      for (size_t i = 0; i < depthValues.size(); i++)        
-      {
-        float depth = depthValues[i];
-        if (
-              depth >= medianDepth-0.12 &&
-              depth <= medianDepth+0.12
-            )   
-        {
-          depthValuesSegmented.push_back(depthValues[i]);
-          average_depth += depthValues[i];
-        }
-      }
-      depthValues = depthValuesSegmented;
-      average_depth /= (float)depthValues.size();
-
-      break;
     }
+
+    pubFilteredLaser_.publish(laserMsgFiltered);
 
     if (depthValues.size() == 0)
     {
@@ -323,17 +295,15 @@ public:
     }
     
     // reduce the FOV of blob
-    double average_bearing = (end_bearing_angles[0] + end_bearing_angles[1])/2.0;
-    double range_bearing = (end_bearing_angles[1] - end_bearing_angles[0])/4.0;
+    // double average_bearing = (end_bearing_angles[0] + end_bearing_angles[1])/2.0;
+    // double range_bearing = (end_bearing_angles[1] - end_bearing_angles[0])/4.0;
 
-    end_bearing_angles[0] = average_bearing - range_bearing;
-    end_bearing_angles[1] = average_bearing + range_bearing;
+    // end_bearing_angles[0] = average_bearing - range_bearing;
+    // end_bearing_angles[1] = average_bearing + range_bearing;
 
     size_t medianIdx = depthValues.size()/2;
     std::nth_element(depthValues.begin(), depthValues.begin()+medianIdx, depthValues.end());
     average_depth = depthValues[medianIdx];
-
-    ros::Time send_time = ros::Time::now();
 
     ROS_INFO(
       "bearing: %f, %f\n", 

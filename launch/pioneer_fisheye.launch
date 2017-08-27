@@ -20,6 +20,13 @@
 	<!-- <node pkg="person_follower" type="relative_kinect_publisher.py" name="relative_kinect_publisher" />  -->
 	
 	<include file="$(find person_follower)/launch/yolo.launch" />
+	<node pkg="leg_detector" type="leg_detector" name="leg_detector" args="$(find leg_detector)/config/trained_leg_detector.yaml">
+		<remap from="/scan" to="/scan_filtered" />
+		
+		<param name="use_seeds" value="false" />
+		<param name="fixed_frame" value="laser" />
+	</node>
+
 	<node pkg="person_follower" type="fisheye_blob_publisher_node" name="fisheye_blob_publisher_node" output="screen">
 		<param name="image_transport" value="compressed" />
 		<param name="camera_wrt_laser_x" value="-0.03" />
@@ -67,10 +74,11 @@
 	    <rosparam command="load" file="$(find person_follower)/config_nav/mapper_params.yaml" />
 	</node>
 
-	<include file="$(find person_follower)/config_nav_pioneer/move_base.xml" />
+	<include file="$(find person_follower)/config_nav_pioneer/move_base.xml" /> -->
 
-	<node pkg="rviz" type="rviz" name="rviz" output="screen" args="-d $(find person_follower)/config/pioneer.rviz"/> -->
-	
+	<!-- <node pkg="rviz" type="rviz" name="rviz" output="screen" args="-d $(find person_follower)/config/pioneer.rviz"/> -->
+	<node pkg="rviz" type="rviz" name="rviz" output="screen" />
+
 	<node pkg="joy" type="joy_node" name="joy_node" output="screen">
 		<remap from="/joy" to="/teleop/joy" />
 		<param name="dev" type="string" value="/dev/input/js0" />
