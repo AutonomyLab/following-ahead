@@ -1,0 +1,86 @@
+<launch>
+	<arg name="base_frame" default="base_link" />
+	<arg name="odom_frame" default="odom" />
+	<arg name="map_frame" default="map" />
+	<arg name="person_frame" default="person_raw" />
+	<arg name="use_deadman" default="true" />
+	<arg name="laser_frame" default="laser" />
+
+	<param name="/use_sim_time" value="false"/>
+	<arg name="move_base_goal_frequency" default="0.5" />
+
+	<!-- Dummy tf for test -->
+	<!-- <node pkg="tf" type="static_transform_publisher" name="static_transform_publisher0" args="0 0 0 0 0 0 map base_link 50"/>
+	<node pkg="tf" type="static_transform_publisher" name="static_transform_publisher1" args="0 0 0 0 0 0 base_link laser 50"/> -->
+
+	<!-- <include file="$(find person_follower)/launch/hokuyo.launch" /> -->
+	
+	<!-- <node pkg="tf" type="static_transform_publisher" name="static_transform_publisher" args="0.11 0 0.220 0 0 0 $(arg base_frame) $(arg laser_frame) 50"/>
+ -->
+	<!-- <node pkg="person_follower" type="relative_kinect_publisher.py" name="relative_kinect_publisher" />  -->
+	
+	<include file="$(find person_follower)/launch/yolo.launch" />
+	<node pkg="person_follower" type="fisheye_blob_publisher_node" name="fisheye_blob_publisher_node" output="screen">
+		<param name="image_transport" value="compressed" />
+		<param name="camera_wrt_laser_x" value="-0.03" />
+		<param name="camera_wrt_laser_y" value="0.0" />
+		<param name="camera_wrt_laser_z" value="0.094" />
+		<param name="camera_wrt_laser_pitch" value="5.0" />
+		<param name="camera_parent_frame" value="$(arg laser_frame)" />
+	</node>
+	
+	<!-- <node pkg="person_follower" type="person_follower_node" name="person_follower_node" output="screen">
+		<param name="base_frame" value="$(arg base_frame)" />
+		<param name="odom_frame" value="$(arg odom_frame)" />
+		<param name="map_frame" value="$(arg map_frame)" />
+		<param name="person_frame" value="$(arg person_frame)" />
+		<param name="use_deadman" value="$(arg use_deadman)" type="bool"/>
+
+		<remap from="/husky/odom" to="/odom" />
+		<remap from="/husky/cmd_vel" to="/cmd_vel" />
+	</node>
+ -->
+	
+	<node name="nav_goal_throttler" type="throttle" pkg="topic_tools" args="messages /move_base_simple/goal_unthrottled $(arg move_base_goal_frequency) /move_base_simple/goal" />
+
+	<!-- nodelets and its manager for cmd_vel mux -->
+	<!-- <node pkg="nodelet" type="nodelet" name="cmd_vel_mux_nodelet_manager"  args="manager"/>
+	
+	<node pkg="nodelet" type="nodelet" name="yocs_cmd_vel_mux"
+        args="load yocs_cmd_vel_mux/CmdVelMuxNodelet cmd_vel_mux_nodelet_manager">
+		<param name="yaml_cfg_file" value="$(find person_follower)/config_nav/cmd_vel_mux.yaml"/>
+	</node> -->
+	<!-- nodelets and its manager for cmd_vel mux -->
+
+	<!-- <node pkg="gmapping" type="slam_gmapping" name="slam_gmapping" output="screen">
+		<param name="odom_frame" value="odom"/>
+		<param name="base_frame" value="$(arg base_frame)"/>
+		<param name="map_frame" value="$(arg map_frame)"/>
+	    <param name="map_update_interval" value="0.1"/>
+	    <param name="particles" value="20" />
+	    <param name="delta" value="0.05"/>
+	    <param name="maxRange" value="7"/>
+	    <param name="xmin" value="-15"/>
+	    <param name="ymin" value="-15"/>
+	    <param name="xmax" value="15"/>
+	    <param name="ymax" value="15"/>
+	    <rosparam command="load" file="$(find person_follower)/config_nav/mapper_params.yaml" />
+	</node>
+
+	<include file="$(find person_follower)/config_nav_pioneer/move_base.xml" />
+
+	<node pkg="rviz" type="rviz" name="rviz" output="screen" args="-d $(find person_follower)/config/pioneer.rviz"/> -->
+	
+	<node pkg="joy" type="joy_node" name="joy_node" output="screen">
+		<remap from="/joy" to="/teleop/joy" />
+		<param name="dev" type="string" value="/dev/input/js0" />
+		<!-- <param name="dev" type="string" value="/dev/input/js2" /> -->
+		<param name="autorepeat_rate" value="10" />
+	</node>
+
+	<include file="$(find person_follower)/launch/hydro.launch" />
+	
+<!-- 	<node pkg="teleop_twist_joy" type="teleop_node" name="teleop_node">
+		<remap from="joy" to="teleop/joy" />
+	</node> -->
+</launch>

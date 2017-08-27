@@ -15,7 +15,14 @@
 		<arg name="color_width" value="320" />
 		<arg name="color_height" value="240" />
 		<arg name="color_fps" value="30" />
-
+                
+                <arg name="fisheye_width" value="640" />
+                <arg name="fisheye_height" value="480" />
+                <arg name="fisheye_fps" value="30" />
+ 
+                <arg name="enable_fisheye" value="true" />
+                <arg name="fisheye_external_trigger" value="0" />
+                <arg name="fisheye_strobe" value="0" />
 	</include>
 	
 </launch>
