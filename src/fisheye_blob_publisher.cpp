@@ -24,6 +24,7 @@
 #include <geometry_msgs/TransformStamped.h>
 #include <sensor_msgs/LaserScan.h>
 #include <people_msgs/PositionMeasurement.h>
+#include <people_msgs/PositionMeasurementArray.h>
 #include <ros/package.h>
 
 #include "robot.hpp"
@@ -49,6 +50,8 @@ private:
   ros::Publisher pubRelativePose_;
   ros::Publisher pubPositionMeasurementSeeds_;
   ros::Publisher pubFilteredLaser_;
+
+  ros::Subscriber subLegDetections_;
 
   sensor_msgs::PointCloud::Ptr pointCloudMsg_;
   ros::NodeHandle nh_;
@@ -113,15 +116,17 @@ public:
   FisheyeBlobPublisher(ros::NodeHandle n)
     : nh_(n),
       pointCloudMsg_(new sensor_msgs::PointCloud),
-      image_transport_(n)
+      image_transport_(n),
+      track_person_(false)
   {
-    track_person_ = false;
-    
     pubPointCloud_ =  nh_.advertise<sensor_msgs::PointCloud>("person_cloud", 1);
     pubRelativePose_ = nh_.advertise<geometry_msgs::TransformStamped>("/person_follower/groundtruth_pose", 1);
     pubPositionMeasurementSeeds_ = nh_.advertise<people_msgs::PositionMeasurement>("/people_tracker_filter", 1);
     pubFilteredLaser_ = nh_.advertise<sensor_msgs::LaserScan>("/scan_filtered", 1);
     pub_undistorted_image_ = image_transport_.advertise("/camera/fisheye/undistorted", 1);
+
+    subLegDetections_ = nh_.subscribe("/people_tracker_measurements", 1000, 
+                                      &FisheyeBlobPublisher::legDetectionCallback, this);
     
     nh_.param("camera_wrt_laser_x", camera_wrt_laser_x_, (float)CAM_WRT_LASER_X);
     nh_.param("camera_wrt_laser_y", camera_wrt_laser_y_, (float)CAM_WRT_LASER_Y);
@@ -164,19 +169,91 @@ public:
     undistorted_image.convertTo(undistorted_image_8bit, CV_8UC1);
   }
 
-  void detectionCallback(const yolo2::ImageDetections::ConstPtr &detectionMsg, const sensor_msgs::LaserScan::ConstPtr &laserMsg, const sensor_msgs::Image::ConstPtr &imageMsg)
+  void legDetectionCallback(const people_msgs::PositionMeasurementArray::ConstPtr &detectionsMsg)
+  {
+    if (!detectionsMsg->people.size())
+    {
+      return;
+    }
+
+    ros::Time send_time = ros::Time::now();
+
+    // TODO: don't just use the first detection
+    size_t selected_person_idx = 0;
+
+    for (size_t person_idx = 0; person_idx < detectionsMsg->people.size(); person_idx++)
+    {  
+      if (track_person_)
+      {  
+        if  ( 
+              fabs(fabs(human_prev_pose_.z) - fabs(detectionsMsg->people[selected_person_idx].pos.z)) < DEPTH_LIMIT_TRACKING 
+            )
+        {
+          human_prev_pose_.z =  detectionsMsg->people[selected_person_idx].pos.z;
+          selected_person_idx = person_idx;
+          break;
+        }
+        else
+        {
+          continue;
+        }
+      }
+      else
+      {
+        // TODO: something better
+        continue;
+      }
+    }
+
+    human_prev_pose_ = cv::Point3f(
+      detectionsMsg->people[selected_person_idx].pos.x,
+      detectionsMsg->people[selected_person_idx].pos.y,
+      detectionsMsg->people[selected_person_idx].pos.z
+    );
+
+    geometry_msgs::TransformStamped transform_stamped;
+    transform_stamped.header.stamp = send_time;
+    transform_stamped.header.frame_id = detectionsMsg->people[selected_person_idx].header.frame_id;
+    transform_stamped.transform.translation.x = detectionsMsg->people[selected_person_idx].pos.x;
+    transform_stamped.transform.translation.y = detectionsMsg->people[selected_person_idx].pos.y;
+    transform_stamped.transform.translation.z = detectionsMsg->people[selected_person_idx].pos.z;
+
+    transform_stamped.transform.rotation.x = 0;
+    transform_stamped.transform.rotation.y = 0;
+    transform_stamped.transform.rotation.z = 0;
+    transform_stamped.transform.rotation.w = 1;
+
+    pubRelativePose_.publish(transform_stamped);
+
+    tf::StampedTransform relative_tf;
+    relative_tf.child_frame_id_ = "relative_pose"; // source
+    relative_tf.frame_id_ = detectionsMsg->people[selected_person_idx].header.frame_id; // target
+    relative_tf.stamp_ = transform_stamped.header.stamp;
+
+    relative_tf.setOrigin(tf::Vector3( 
+      transform_stamped.transform.translation.x, 
+      transform_stamped.transform.translation.y, 
+      transform_stamped.transform.translation.z
+    ));
+
+    relative_tf.setRotation(tf::Quaternion(0, 0, 0, 1));
+
+    tf_broadcaster_.sendTransform(relative_tf);
+
+  }
+
+  void yoloDetectionCallback(const yolo2::ImageDetections::ConstPtr &detectionMsg, const sensor_msgs::LaserScan::ConstPtr &laserMsg, const sensor_msgs::Image::ConstPtr &imageMsg)
   {
     if (detectionMsg == NULL || laserMsg == NULL || imageMsg == NULL)
     {
       return;
     }
 
-    ROS_INFO("callback");
-    std::vector<cv::Point2f> undistortedPoints;
-    std::vector<float> depthValues;
-    std::vector<cv::Point2f> vectPersonPoints;
-
-    people_msgs::PositionMeasurement leg_detector_seeds;
+    ros::Time send_time = ros::Time::now();
+    
+    camera_tf_.stamp_ = send_time;
+    tf_broadcaster_.sendTransform(camera_tf_);
+    
     sensor_msgs::LaserScan laserMsgFiltered = *laserMsg;
 
     // bearing angles of endpoints
@@ -186,24 +263,16 @@ public:
     cv_bridge::CvImageConstPtr cv_ptr;
     cv_ptr = cv_bridge::toCvShare(imageMsg);
     
-    ros::Time send_time = ros::Time::now();
-    
     laserMsgFiltered.header.stamp = send_time;
     std::fill(laserMsgFiltered.ranges.begin(), laserMsgFiltered.ranges.end(), laserMsgFiltered.range_max);
-    // leg_detector_seeds.header.stamp = send_time;
-    // leg_detector_seeds.header.frame_id = camera_parent_frame_;
-
-    ROS_INFO("IMAGE");
-
+    
     for (uint32_t detection_idx=0; detection_idx<detectionMsg->detections.size(); detection_idx++)
     {
-      ROS_INFO("LOOP");
       if (detectionMsg->detections[detection_idx].class_id != 0)
       {
         continue;
       }
 
-      std::cout << "row" << std::endl;
       // endpoints of blob in the image
       uint32_t row = std::min(
         (uint32_t)std::max(
@@ -214,12 +283,10 @@ public:
       );
 
       uint32_t end_cols[2];
-      std::cout << "col1" << std::endl;
       end_cols[0] = std::min(
         (uint32_t)std::max((uint32_t)detectionMsg->detections[detection_idx].roi.x_offset, (uint32_t)0),
         (uint32_t)(cv_ptr->image.cols-1)
       );
-      std::cout << "col2" << std::endl;
       end_cols[1] = std::min(
         (uint32_t)std::max(
           (uint32_t)(detectionMsg->detections[detection_idx].roi.x_offset + detectionMsg->detections[detection_idx].roi.width), 
@@ -247,16 +314,11 @@ public:
         // cv::Point3f laser_bearing = transformPoint(R_laser_camera, camera_bearing);
         cv::Point3f laser_bearing(-point3D[2], -point3D[1], 0);
 
-        std::cout << "point: " << point3D[0] << ", " << point3D[1] << ", " << point3D[2] << std::endl;
-        std::cout << "point: " << laser_bearing.x << ", " << laser_bearing.y << ", " << laser_bearing.z << std::endl;
-
         // find the angle of with respect to the x axis of laser (-z of camera)
         end_bearing_angles[i] = atan2(
           laser_bearing.y,
           laser_bearing.x
         );
-
-        std::cout << "bearing angle: " << end_bearing_angles[i] * 180 / M_PI << std::endl;
       }
       
       double min_bearing_angle = std::min(end_bearing_angles[0], end_bearing_angles[1]);
@@ -288,64 +350,6 @@ public:
 
     pubFilteredLaser_.publish(laserMsgFiltered);
 
-    if (depthValues.size() == 0)
-    {
-      ROS_WARN("No person");
-      return;
-    }
-    
-    // reduce the FOV of blob
-    // double average_bearing = (end_bearing_angles[0] + end_bearing_angles[1])/2.0;
-    // double range_bearing = (end_bearing_angles[1] - end_bearing_angles[0])/4.0;
-
-    // end_bearing_angles[0] = average_bearing - range_bearing;
-    // end_bearing_angles[1] = average_bearing + range_bearing;
-
-    size_t medianIdx = depthValues.size()/2;
-    std::nth_element(depthValues.begin(), depthValues.begin()+medianIdx, depthValues.end());
-    average_depth = depthValues[medianIdx];
-
-    ROS_INFO(
-      "bearing: %f, %f\n", 
-      end_bearing_angles[0] * 180 / M_PI,
-      end_bearing_angles[1] * 180 / M_PI
-    );
-
-    pointCloudMsg_->header.frame_id = camera_parent_frame_; //camera_frame_;
-    pointCloudMsg_->header.stamp = send_time;
-    pointCloudMsg_->points.clear();
-    for (double bearing_angle = end_bearing_angles[0]; bearing_angle <= end_bearing_angles[1]; bearing_angle += 0.01)
-    {
-      geometry_msgs::Point32 point;
-      point.x = cos(bearing_angle) * average_depth;
-      point.y = sin(bearing_angle) * average_depth;
-      point.z = 0;
-
-      // point.z = cos(bearing_angle) * average_depth;
-      // point.y = sin(bearing_angle) * average_depth;
-      // point.x = 0;
-
-      pointCloudMsg_->points.push_back(point);
-    }
-    ROS_INFO("point cloud create");
-    
-    // for (double *bearing_vector: bearing_vectors)
-    // {
-    //   geometry_msgs::Point32 point;
-      
-    //   double scale = 2;
-    //   point.x = bearing_vector[0] * scale;
-    //   point.y = bearing_vector[1] * scale;
-    //   point.z = bearing_vector[2] * scale;
-
-    //   pointCloudMsg_->points.push_back(point);
-    // }
-    pubPointCloud_.publish(pointCloudMsg_);
-    ROS_INFO("point cloud pub");
-    camera_tf_.stamp_ = send_time;
-    tf_broadcaster_.sendTransform(camera_tf_);
-    
-    ROS_INFO("tf pub");
     // cv::Mat undistorted_image_8bit;
     // undistortImage(cv_ptr, undistorted_image_8bit);
     // cv_bridge::CvImage cv_bridge_image;
@@ -372,7 +376,7 @@ int main(int argc, char** argv)
   
   typedef message_filters::sync_policies::ApproximateTime<yolo2::ImageDetections, sensor_msgs::LaserScan, sensor_msgs::Image> SyncPolicy;
   message_filters::Synchronizer<SyncPolicy> sync(SyncPolicy(1000), detectionSub, laserSub, imageSub);
-  sync.registerCallback(boost::bind(&FisheyeBlobPublisher::detectionCallback, &fisheye_blob_publisher, _1, _2, _3));
+  sync.registerCallback(boost::bind(&FisheyeBlobPublisher::yoloDetectionCallback, &fisheye_blob_publisher, _1, _2, _3));
 
   ros::spin();
   return 0;
