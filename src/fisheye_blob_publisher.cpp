@@ -1,8 +1,8 @@
 #define CAM_WRT_LASER_X -0.03
 #define CAM_WRT_LASER_Y 0.0
 #define CAM_WRT_LASER_Z 0.094
-
 #define CAM_WRT_LASER_PITCH 5
+#define PERSON_LOST_TIMEOUT 2
 
 #include "ros/ros.h"
 #include "yolo2/ImageDetections.h"
@@ -45,9 +45,20 @@
 
 class FisheyeBlobPublisher
 {
+public:
+  enum tracking_status_t {
+    PERSON_SELECTED,
+    PERSON_UNDER_CONSIDERATION,
+    LOST
+  };
+
 private:
+  tracking_status_t tracking_status_;
+  size_t num_seen_person_under_consideration_; 
+
   ros::Publisher pubPointCloud_;
   ros::Publisher pubRelativePose_;
+  // TODO: publisher for seed
   ros::Publisher pubPositionMeasurementSeeds_;
   ros::Publisher pubFilteredLaser_;
 
@@ -56,14 +67,18 @@ private:
   sensor_msgs::PointCloud::Ptr pointCloudMsg_;
   ros::NodeHandle nh_;
   tf::TransformBroadcaster tf_broadcaster_;
+  tf::TransformListener tf_listener_;
+
   cv::Point3f human_prev_pose_;
   float camera_wrt_laser_x_;
   float camera_wrt_laser_y_;
   float camera_wrt_laser_z_;
   float camera_wrt_laser_pitch_;
-  bool track_person_;
+  double person_lost_timeout_;
+  double last_update_time_;
   std::string camera_parent_frame_;
   std::string camera_frame_;
+  std::string map_frame_;
   std::string fisheye_config_file_;
 
   tf::StampedTransform camera_tf_;
@@ -72,6 +87,8 @@ private:
   image_transport::Publisher pub_undistorted_image_;
 
   struct ocam_model fisheye_model_;
+
+  
 
 public:
 
@@ -117,7 +134,8 @@ public:
     : nh_(n),
       pointCloudMsg_(new sensor_msgs::PointCloud),
       image_transport_(n),
-      track_person_(false)
+      tracking_status_(tracking_status_t::LOST),
+      num_seen_person_under_consideration_(0)
   {
     pubPointCloud_ =  nh_.advertise<sensor_msgs::PointCloud>("person_cloud", 1);
     pubRelativePose_ = nh_.advertise<geometry_msgs::TransformStamped>("/person_follower/groundtruth_pose", 1);
@@ -127,13 +145,15 @@ public:
 
     subLegDetections_ = nh_.subscribe("/people_tracker_measurements", 1000, 
                                       &FisheyeBlobPublisher::legDetectionCallback, this);
-    
+   
+    nh_.param("person_lost_timeout", person_lost_timeout_, (double)PERSON_LOST_TIMEOUT);
     nh_.param("camera_wrt_laser_x", camera_wrt_laser_x_, (float)CAM_WRT_LASER_X);
     nh_.param("camera_wrt_laser_y", camera_wrt_laser_y_, (float)CAM_WRT_LASER_Y);
     nh_.param("camera_wrt_laser_z", camera_wrt_laser_z_, (float)CAM_WRT_LASER_Z);
     nh_.param("camera_wrt_laser_pitch", camera_wrt_laser_pitch_, (float)CAM_WRT_LASER_PITCH);
     nh_.param("camera_parent_frame", camera_parent_frame_,  std::string("laser"));
     nh_.param("camera_frame", camera_frame_,  std::string("camera"));
+    nh_.param("map_frame", map_frame_,  std::string("map"));
     nh_.param(
       "fisheye_config", fisheye_config_file_, 
       ros::package::getPath("person_follower") + "/config/fisheye_calib.txt"
@@ -179,31 +199,124 @@ public:
     ros::Time send_time = ros::Time::now();
 
     // TODO: don't just use the first detection
-    size_t selected_person_idx = 0;
+    int selected_person_idx = -1;
+    float min_leg_dist = 100;
 
-    for (size_t person_idx = 0; person_idx < detectionsMsg->people.size(); person_idx++)
-    {  
-      if (track_person_)
+    if  (
+          tracking_status_ == tracking_status_t::PERSON_SELECTED ||
+          tracking_status_ == tracking_status_t::PERSON_UNDER_CONSIDERATION
+        )
+    {
+      min_leg_dist = DEPTH_LIMIT_TRACKING;
+      for (size_t person_idx = 0; person_idx < detectionsMsg->people.size(); person_idx++)
       {  
+        float leg_dist = sqrt(
+          pow(human_prev_pose_.x - detectionsMsg->people[person_idx].pos.x, 2) +
+          pow(human_prev_pose_.y - detectionsMsg->people[person_idx].pos.y, 2)
+        );
         if  ( 
-              fabs(fabs(human_prev_pose_.z) - fabs(detectionsMsg->people[selected_person_idx].pos.z)) < DEPTH_LIMIT_TRACKING 
+               leg_dist < min_leg_dist 
             )
         {
-          human_prev_pose_.z =  detectionsMsg->people[selected_person_idx].pos.z;
+          if (tracking_status_ == tracking_status_t::PERSON_UNDER_CONSIDERATION)
+          {
+            num_seen_person_under_consideration_++;
+            ROS_INFO("person under consideration %d", num_seen_person_under_consideration_);
+            // TODO: softcode this number
+            if (num_seen_person_under_consideration_ > 10)
+            {
+              tracking_status_ = tracking_status_t::PERSON_SELECTED;
+              ROS_INFO("person selected");
+            }
+          }
+
+          last_update_time_ = send_time.toSec();
+          human_prev_pose_.x =  detectionsMsg->people[person_idx].pos.x;
+          human_prev_pose_.y =  detectionsMsg->people[person_idx].pos.y;
+          human_prev_pose_.z =  detectionsMsg->people[person_idx].pos.z;
           selected_person_idx = person_idx;
-          break;
-        }
-        else
-        {
+          min_leg_dist = leg_dist;
           continue;
         }
       }
+    }
+    
+    if (selected_person_idx == -1)
+    {
+      // the transformation from map frame to laser frame
+      tf::StampedTransform camera_T_map;
+      try
+      {
+        
+        tf_listener_.lookupTransform(camera_frame_, map_frame_,
+                                    ros::Time(0), camera_T_map);
+      }
+      catch (tf::TransformException ex)
+      {
+          ROS_ERROR("TF error %s", ex.what());
+          return;
+      }
+      //find the closest one
+      for (size_t person_idx = 0; person_idx < detectionsMsg->people.size(); person_idx++)
+      { 
+        
+        cv::Point3f map_pos(
+          detectionsMsg->people[person_idx].pos.x,
+          detectionsMsg->people[person_idx].pos.y,
+          detectionsMsg->people[person_idx].pos.z
+        );
+
+        cv::Point3f camera_pos = transformPoint(camera_T_map, map_pos);
+        
+        float leg_dist = sqrt(
+          pow(camera_pos.x, 2) +
+          pow(camera_pos.y, 2) +
+          pow(camera_pos.z, 2) 
+        );
+
+        ROS_INFO("%d leg dist: %f", person_idx, leg_dist);
+
+        if (leg_dist < min_leg_dist)
+        {
+          selected_person_idx = person_idx;
+          min_leg_dist = leg_dist;
+        }
+      }
+
+      if (selected_person_idx != -1)
+      {
+        // we found the closest one
+        tracking_status_ = tracking_status_t::PERSON_UNDER_CONSIDERATION;
+        num_seen_person_under_consideration_ = 0;
+        human_prev_pose_ = cv::Point3f(
+          detectionsMsg->people[selected_person_idx].pos.x,
+          detectionsMsg->people[selected_person_idx].pos.y,
+          detectionsMsg->people[selected_person_idx].pos.z
+        );
+        ROS_INFO("Person is under consideration");
+      } 
       else
       {
-        // TODO: something better
-        continue;
+        // nothing found, but still try to track the person later
+        if (fabs(send_time.toSec() - last_update_time_) > person_lost_timeout_)
+        {
+          num_seen_person_under_consideration_ = 0;
+          tracking_status_ = tracking_status_t::LOST;
+          ROS_INFO("PERSON LOST!!");
+        }
+        else
+        {
+          ROS_INFO("Waiting for person to return");
+        }
       }
     }
+
+
+    if (tracking_status_ != tracking_status_t::PERSON_SELECTED || selected_person_idx==-1)
+    {
+      return;
+    }
+    
 
     human_prev_pose_ = cv::Point3f(
       detectionsMsg->people[selected_person_idx].pos.x,
@@ -254,6 +367,21 @@ public:
     camera_tf_.stamp_ = send_time;
     tf_broadcaster_.sendTransform(camera_tf_);
     
+    if (!detectionMsg->detections.size())
+    {
+      // nothing found, but still try to track the person later
+      if (fabs(send_time.toSec() - last_update_time_) > person_lost_timeout_)
+      {
+        num_seen_person_under_consideration_ = 0;
+        tracking_status_ = tracking_status_t::LOST;
+        ROS_INFO("PERSON LOST!!");
+      }
+      else
+      {
+        ROS_INFO("Waiting for person to return");
+      }
+    }
+
     sensor_msgs::LaserScan laserMsgFiltered = *laserMsg;
 
     // bearing angles of endpoints
@@ -346,6 +474,19 @@ public:
       {
         laserMsgFiltered.ranges[i] = laserMsg->ranges[i];
       }
+    }
+
+    if (tracking_status_ != tracking_status_t::LOST)
+    {
+      people_msgs::PositionMeasurement measurement_seed;
+      measurement_seed.header.stamp = send_time;
+      measurement_seed.header.frame_id = map_frame_;
+      measurement_seed.name = "person";
+      measurement_seed.object_id = "0";
+      measurement_seed.pos.x = human_prev_pose_.x;
+      measurement_seed.pos.x = human_prev_pose_.y;
+      measurement_seed.pos.x = human_prev_pose_.z; 
+      pubPositionMeasurementSeeds_.publish(measurement_seed);
     }
 
     pubFilteredLaser_.publish(laserMsgFiltered);

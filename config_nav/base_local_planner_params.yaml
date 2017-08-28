@@ -1,7 +1,7 @@
 TrajectoryPlannerROS:
   #Independent settings for the local costmap
   transform_tolerance: 0.3
-  sim_time: 1.7
+  sim_time: 1
   sim_granularity: 0.025
   dwa: true
   vx_samples: 3
