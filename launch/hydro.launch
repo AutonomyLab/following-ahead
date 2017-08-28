@@ -1,7 +1,14 @@
 <launch>
-        <group>
-            <machine name="hydro" address="hydro" default="true" user="payam" env-loader="~/env_loader.sh" />
-            <include file="$(find person_follower)/launch/hokuyo.launch" />
-            <include file="$(find person_follower)/launch/camera.launch" />
-        </group>
+	<arg name="laser_frame" default="laser" />
+	<arg name="laser_frame_back" default="laser_back" />
+		
+    <group>
+        <machine name="hydro" address="hydro" default="true" user="payam" env-loader="~/env_loader.sh" />
+
+        <include file="$(find person_follower)/launch/hokuyo.launch">
+        	<arg name="laser_frame" value="$(arg laser_frame)" />
+        	<arg name="laser_frame_back" value="$(arg laser_frame_back)" />
+        </include>
+        <include file="$(find person_follower)/launch/camera.launch" />
+    </group>
 </launch>

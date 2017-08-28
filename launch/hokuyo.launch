@@ -1,12 +1,19 @@
 <launch>
-	<node pkg="hokuyo_node" type="hokuyo_node" name="back_hokuyo_node" args="/dev/sensors/hokuyo_H0508411">
+	<arg name="laser_frame" default="laser" />
+	<arg name="laser_frame_back" default="laser_back" />
+
+	<node pkg="hokuyo_node" type="hokuyo_node" name="back_hokuyo_node">
 		<param name="max_ang" value="2.0943951023931953" />
 		<param name="min_ang" value="-2.0943951023931953" />
+		<param name="frame_id" value="$(arg laser_frame_back)" />
+		<param name="port" value="/dev/sensors/hokuyo_H0508411" />
 		<remap from="scan" to="back_scan" />
 	</node>
 
-	<node pkg="hokuyo_node" type="hokuyo_node" name="front_hokuyo_node" args="/dev/sensors/hokuyo_H0613970">
+	<node pkg="hokuyo_node" type="hokuyo_node" name="front_hokuyo_node">
 		<param name="max_ang" value="2.0943951023931953" />
 		<param name="min_ang" value="-2.0943951023931953" />
+		<param name="frame_id" value="$(arg laser_frame)" />
+		<param name="port" value="/dev/sensors/hokuyo_H0613970" />
 	</node>
 </launch>

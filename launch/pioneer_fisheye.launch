@@ -10,14 +10,14 @@
 	<param name="/use_sim_time" value="false"/>
 	<arg name="move_base_goal_frequency" default="0.5" />
 
-	<node pkg="tf" type="static_transform_publisher" name="static_transform_publisher" args="0.11 0 0.220 0 0 0 $(arg base_frame) $(arg laser_frame) 50"/>
+	<node pkg="tf" type="static_transform_publisher" name="static_transform_publisher1" args="0.11 0 0.220 0 0 0 $(arg base_frame) $(arg laser_frame) 50"/>
 
-	<node pkg="tf" type="static_transform_publisher" name="static_transform_publisher" args="0.11 0 0.220 0 0 0 $(arg base_frame) $(arg laser_frame_back) 50"/>
+	<node pkg="tf" type="static_transform_publisher" name="static_transform_publisher2" args="-0.10 -0.05 0.195 3.141592653589793 0 0 $(arg laser_frame) $(arg laser_frame_back) 50"/>
 
 	<!-- <node pkg="person_follower" type="relative_kinect_publisher.py" name="relative_kinect_publisher" />  -->
 	
 	<include file="$(find person_follower)/launch/yolo.launch" />
-	<node pkg="leg_detector" type="leg_detector" name="leg_detector" args="$(find leg_detector)/config/trained_leg_detector.yaml">
+	<node pkg="leg_detector" type="leg_detector" name="leg_detector" args="$(find leg_detector)/config/trained_leg_detector.yaml" output="screen">
 		<remap from="/scan" to="/scan_filtered" />
 		
 		<param name="use_seeds" value="false" />
@@ -84,7 +84,10 @@
 		<param name="autorepeat_rate" value="10" />
 	</node>
 
-	<include file="$(find person_follower)/launch/hydro.launch" />
+	<include file="$(find person_follower)/launch/hydro.launch">
+		<arg name="laser_frame" value="$(arg laser_frame)" />
+        <arg name="laser_frame_back" value="$(arg laser_frame_back)" />
+	</include>
 	
 <!-- 	<node pkg="teleop_twist_joy" type="teleop_node" name="teleop_node">
 		<remap from="joy" to="teleop/joy" />
