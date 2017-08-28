@@ -1,5 +1,11 @@
 <launch>
-	<node pkg="hokuyo_node" type="hokuyo_node" name="hokuyo_node" args="/dev/ttyACM0">
+	<node pkg="hokuyo_node" type="hokuyo_node" name="back_hokuyo_node" args="/dev/sensors/hokuyo_H0508411">
+		<param name="max_ang" value="2.0943951023931953" />
+		<param name="min_ang" value="-2.0943951023931953" />
+		<remap from="scan" to="back_scan" />
+	</node>
+
+	<node pkg="hokuyo_node" type="hokuyo_node" name="front_hokuyo_node" args="/dev/sensors/hokuyo_H0613970">
 		<param name="max_ang" value="2.0943951023931953" />
 		<param name="min_ang" value="-2.0943951023931953" />
 	</node>

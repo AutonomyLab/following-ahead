@@ -5,18 +5,15 @@
 	<arg name="person_frame" default="person_raw" />
 	<arg name="use_deadman" default="true" />
 	<arg name="laser_frame" default="laser" />
+	<arg name="laser_frame_back" default="laser_back" />
 
 	<param name="/use_sim_time" value="false"/>
 	<arg name="move_base_goal_frequency" default="0.5" />
 
-	<!-- Dummy tf for test -->
-	<!-- <node pkg="tf" type="static_transform_publisher" name="static_transform_publisher0" args="0 0 0 0 0 0 map base_link 50"/>
-	<node pkg="tf" type="static_transform_publisher" name="static_transform_publisher1" args="0 0 0 0 0 0 base_link laser 50"/> -->
+	<node pkg="tf" type="static_transform_publisher" name="static_transform_publisher" args="0.11 0 0.220 0 0 0 $(arg base_frame) $(arg laser_frame) 50"/>
 
-	<!-- <include file="$(find person_follower)/launch/hokuyo.launch" /> -->
-	
-	<!-- <node pkg="tf" type="static_transform_publisher" name="static_transform_publisher" args="0.11 0 0.220 0 0 0 $(arg base_frame) $(arg laser_frame) 50"/>
- -->
+	<node pkg="tf" type="static_transform_publisher" name="static_transform_publisher" args="0.11 0 0.220 0 0 0 $(arg base_frame) $(arg laser_frame_back) 50"/>
+
 	<!-- <node pkg="person_follower" type="relative_kinect_publisher.py" name="relative_kinect_publisher" />  -->
 	
 	<include file="$(find person_follower)/launch/yolo.launch" />
@@ -24,7 +21,7 @@
 		<remap from="/scan" to="/scan_filtered" />
 		
 		<param name="use_seeds" value="false" />
-		<param name="fixed_frame" value="laser" />
+		<param name="fixed_frame" value="$(arg map_frame)" />
 	</node>
 
 	<node pkg="person_follower" type="fisheye_blob_publisher_node" name="fisheye_blob_publisher_node" output="screen">
@@ -33,10 +30,12 @@
 		<param name="camera_wrt_laser_y" value="0.0" />
 		<param name="camera_wrt_laser_z" value="0.094" />
 		<param name="camera_wrt_laser_pitch" value="5.0" />
-		<param name="camera_parent_frame" value="$(arg laser_frame)" />
+		<param name="camera_parent_frame" value="$(arg laser_frame_back)" />
+
+		<remap from="/scan" to="/back_scan" />
 	</node>
 	
-	<!-- <node pkg="person_follower" type="person_follower_node" name="person_follower_node" output="screen">
+	<node pkg="person_follower" type="person_follower_node" name="person_follower_node" output="screen">
 		<param name="base_frame" value="$(arg base_frame)" />
 		<param name="odom_frame" value="$(arg odom_frame)" />
 		<param name="map_frame" value="$(arg map_frame)" />
@@ -46,20 +45,20 @@
 		<remap from="/husky/odom" to="/odom" />
 		<remap from="/husky/cmd_vel" to="/cmd_vel" />
 	</node>
- -->
+
 	
 	<node name="nav_goal_throttler" type="throttle" pkg="topic_tools" args="messages /move_base_simple/goal_unthrottled $(arg move_base_goal_frequency) /move_base_simple/goal" />
 
 	<!-- nodelets and its manager for cmd_vel mux -->
-	<!-- <node pkg="nodelet" type="nodelet" name="cmd_vel_mux_nodelet_manager"  args="manager"/>
+	<node pkg="nodelet" type="nodelet" name="cmd_vel_mux_nodelet_manager"  args="manager"/>
 	
 	<node pkg="nodelet" type="nodelet" name="yocs_cmd_vel_mux"
         args="load yocs_cmd_vel_mux/CmdVelMuxNodelet cmd_vel_mux_nodelet_manager">
 		<param name="yaml_cfg_file" value="$(find person_follower)/config_nav/cmd_vel_mux.yaml"/>
-	</node> -->
+	</node>
 	<!-- nodelets and its manager for cmd_vel mux -->
 
-	<!-- <node pkg="gmapping" type="slam_gmapping" name="slam_gmapping" output="screen">
+	<node pkg="gmapping" type="slam_gmapping" name="slam_gmapping" output="screen">
 		<param name="odom_frame" value="odom"/>
 		<param name="base_frame" value="$(arg base_frame)"/>
 		<param name="map_frame" value="$(arg map_frame)"/>
@@ -74,10 +73,9 @@
 	    <rosparam command="load" file="$(find person_follower)/config_nav/mapper_params.yaml" />
 	</node>
 
-	<include file="$(find person_follower)/config_nav_pioneer/move_base.xml" /> -->
+	<include file="$(find person_follower)/config_nav_pioneer/move_base.xml" />
 
-	<!-- <node pkg="rviz" type="rviz" name="rviz" output="screen" args="-d $(find person_follower)/config/pioneer.rviz"/> -->
-	<node pkg="rviz" type="rviz" name="rviz" output="screen" />
+	<node pkg="rviz" type="rviz" name="rviz" output="screen" args="-d $(find person_follower)/config/pioneer.rviz"/>
 
 	<node pkg="joy" type="joy_node" name="joy_node" output="screen">
 		<remap from="/joy" to="/teleop/joy" />
