@@ -20,7 +20,7 @@
 	<!-- <node pkg="person_follower" type="relative_kinect_publisher.py" name="relative_kinect_publisher" />  -->
 	
 	<include file="$(find person_follower)/launch/yolo.launch" />
-	<node pkg="person_follower" type="camera_blob_publisher_node" name="camera_blob_publisher_node">
+	<node pkg="person_follower" type="camera_blob_publisher_node" name="camera_blob_publisher_node" output="screen">
 		<param name="image_transport" value="compressedDepth" />
 		<param name="camera_wrt_laser_x" value="-0.075" />
 		<param name="camera_wrt_laser_y" value="-0.01" />
@@ -35,6 +35,8 @@
 		<param name="map_frame" value="$(arg map_frame)" />
 		<param name="person_frame" value="$(arg person_frame)" />
 		<param name="use_deadman" value="$(arg use_deadman)" type="bool"/>
+
+		<param name="blob_measurement_timeout" value="10.0" />
 
 		<remap from="/husky/odom" to="/odom" />
 		<remap from="/husky/cmd_vel" to="/cmd_vel" />
@@ -88,13 +90,14 @@
 	<node pkg="joy" type="joy_node" name="joy_node" output="screen">
 		<remap from="/joy" to="/teleop/joy" />
 		<param name="dev" type="string" value="/dev/input/js0" />
-		<!-- <param name="dev" type="string" value="/dev/input/js2" /> -->
 		<param name="autorepeat_rate" value="10" />
 	</node>
 
 	<include file="$(find person_follower)/launch/hydro.launch" />
 	
-<!-- 	<node pkg="teleop_twist_joy" type="teleop_node" name="teleop_node">
+	<node pkg="teleop_twist_joy" type="teleop_node" name="teleop_node">
 		<remap from="joy" to="teleop/joy" />
-	</node> -->
+		<remap from="cmd_vel" to="teleop_cmd_vel" />
+		<param name="enable_button" value="1" />
+	</node>
 </launch>

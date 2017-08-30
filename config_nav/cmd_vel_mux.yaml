@@ -1,7 +1,13 @@
 subscribers:
+  - name:        "teleop_cmd_vel"
+    topic:       "/teleop_cmd_vel"
+    timeout:     1.5
+    priority:    2
+    short_desc:  "The default cmd_vel, controllers unaware that we are multiplexing cmd_vel should come here"
+  
   - name:        "zero_cmd_vel"
     topic:       "/person_follower/zero_cmd_vel"
-    timeout:     1
+    timeout:     1.5
     priority:    1
     short_desc:  "The default cmd_vel, controllers unaware that we are multiplexing cmd_vel should come here"
 

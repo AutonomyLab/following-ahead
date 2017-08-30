@@ -66,41 +66,41 @@ int LinearMotionModel::updatePrediction(  cv::Mat &map, float map_resolution,
     object_point = object_point_out;
     destination_point = destination_point_out;
 
-    if (remaining_distance <= 0)
-    {
-      if (avoid_infinit_loop_counter<20)
-      {
-        avoid_infinit_loop_counter++;
-        cv::Point object_vector = destination_point - current_object_point_;
-        float distance_from_object = cv::norm(object_vector) * map_resolution;
+    // if (remaining_distance <= 0)
+    // {
+    //   if (avoid_infinit_loop_counter<20)
+    //   {
+    //     avoid_infinit_loop_counter++;
+    //     cv::Point object_vector = destination_point - current_object_point_;
+    //     float distance_from_object = cv::norm(object_vector) * map_resolution;
         
-        if (distance_from_object < (float)PREDICTION_LOOKAHEAD_DISTANCE)
-        {
-          // add some length so that you are fixed distance from the original object
-          remaining_distance = ((float)PREDICTION_LOOKAHEAD_DISTANCE-distance_from_object) * DESTINATION_EXTENTION_PERCENTAGE; 
+    //     if (distance_from_object < (float)PREDICTION_LOOKAHEAD_DISTANCE)
+    //     {
+    //       // add some length so that you are fixed distance from the original object
+    //       remaining_distance = ((float)PREDICTION_LOOKAHEAD_DISTANCE-distance_from_object) * DESTINATION_EXTENTION_PERCENTAGE; 
 
-          cv::Point object_vector_normalized(object_vector.x , object_vector.y);
-          object_vector_normalized = object_vector_normalized / cv::norm(object_vector_normalized); 
+    //       cv::Point object_vector_normalized(object_vector.x , object_vector.y);
+    //       object_vector_normalized = object_vector_normalized / cv::norm(object_vector_normalized); 
 
-          float remaining_distance_pixels = remaining_distance / map_resolution;
-          destination_point.x += round(object_vector_normalized.x * remaining_distance_pixels);
-          destination_point.y += round(object_vector_normalized.y * remaining_distance_pixels);
+    //       float remaining_distance_pixels = remaining_distance / map_resolution;
+    //       destination_point.x += round(object_vector_normalized.x * remaining_distance_pixels);
+    //       destination_point.y += round(object_vector_normalized.y * remaining_distance_pixels);
 
-          object_vector = destination_point - current_object_point_;
-          distance_from_object = cv::norm(object_vector) * map_resolution;
+    //       object_vector = destination_point - current_object_point_;
+    //       distance_from_object = cv::norm(object_vector) * map_resolution;
 
-          if (distance_from_object > PREDICTION_LOOKAHEAD_DISTANCE)
-          {
-            ROS_WARN("Prediction (%f) distance greater than lookahead (%f)", distance_from_object, PREDICTION_LOOKAHEAD_DISTANCE);
-          }
-        }
-      }
-      else
-      {
-        // probably it is not a good destination
-        return 1;
-      }
-    }
+    //       if (distance_from_object > PREDICTION_LOOKAHEAD_DISTANCE)
+    //       {
+    //         ROS_WARN("Prediction (%f) distance greater than lookahead (%f)", distance_from_object, PREDICTION_LOOKAHEAD_DISTANCE);
+    //       }
+    //     }
+    //   }
+    //   else
+    //   {
+    //     // probably it is not a good destination
+    //     return 1;
+    //   }
+    // }
   }
   previous_destination_point_ = destination_point_out;
 
@@ -199,10 +199,10 @@ int LinearMotionModel::updateWayPoint(  cv::Mat &map, float map_resolution,
   {
     ROS_ERROR("obs size: %d", obstacles.size());
   }
-  if (obstacles.size() > num_obstacles_old + 10)
-  {
-    ROS_INFO("Obstacle increased by %d", obstacles.size() - num_obstacles_old);
-  }
+  // if (obstacles.size() > num_obstacles_old + 10)
+  // {
+  //   ROS_INFO("Obstacle increased by %d", obstacles.size() - num_obstacles_old);
+  // }
 
 
   if (is_obstacle)
@@ -237,13 +237,20 @@ int LinearMotionModel::updateWayPoint(  cv::Mat &map, float map_resolution,
 
     // TODO: floodfill before doing the hough transform
     std::vector<cv::Vec2f> lines;
-    cv::HoughLines(obstacle_image, lines, OBSTACLE_INFLATION * 1.1 / map_resolution, CV_PI/180.0*2.0, obstacle_count*0.45, 0, 0);
+    cv::HoughLines(obstacle_image, lines, OBSTACLE_INFLATION * 1.7 / map_resolution, CV_PI/180.0*2.0, obstacle_count*0.45, 0, 0);
 
     // vector<Vec4i> lines;
     // HoughLinesP(obstacle_image, lines, 1, CV_PI/180, 15, 3, 1 );
 
     if (lines.size())
     {
+      for (size_t line_idx = 0; line_idx < lines.size(); line_idx++)
+      {
+        float rho = lines[line_idx][0];
+        float theta = lines[line_idx][1];
+        ROS_INFO("number of lines: %d, line %d, theta:%f rho:%f ",lines.size(), line_idx, theta*180/M_PI, rho);
+      }
+
       for (size_t line_idx = 0; line_idx < 1/*lines.size()*/; line_idx++)
       {
         // std::cout << "Line: " << lines[line_idx] << std::endl;
@@ -312,8 +319,8 @@ int LinearMotionModel::updateWayPoint(  cv::Mat &map, float map_resolution,
   }
   
   // visualize the robot and the person
-  // cv::circle(debug_map, object_point, 8, 255);
-  // cv::circle(debug_map, destination_point, 5, 255);
+  cv::circle(debug_map, object_point, 8, 255);
+  cv::circle(debug_map, destination_point, 5, 255);
 
   return 0;
 
@@ -367,43 +374,95 @@ int LinearMotionModel::chooseObstacleDirection(
   };
 
   // choose max cuz you don't want to go through the obstacle
-  float backing_off_angle = (object2obstacle_normal_angle[0] > object2obstacle_normal_angle[1]) ?
-                            obstacle_normal_angles[0] : obstacle_normal_angles[1];
+  size_t backing_off_angle_idx = (object2obstacle_normal_angle[0] > object2obstacle_normal_angle[1]) ? 0 : 1; 
+  // float backing_off_angle = (object2obstacle_normal_angle[0] > object2obstacle_normal_angle[1]) ?
+  //                           obstacle_normal_angles[0] : obstacle_normal_angles[1];
 
-  float clearance = OBSTACLE_CLEARANCE_DISTANCE / map_resolution;
-  object_point_out.x = round(obstacle_point.x + clearance * cos(backing_off_angle));
-  object_point_out.y = round(obstacle_point.y + clearance * sin(backing_off_angle));
-  object_point_out.x = std::max( std::min(object_point_out.x, map.cols-1), 0);
-  object_point_out.y = std::max( std::min(object_point_out.y, map.rows-1), 0);
-
-  cv::LineIterator backing_off_line_iterator(
-    map, 
-    cv::Point(round(obstacle_point.x), round(obstacle_point.y)),
-    cv::Point(round(object_point_out.x), round(object_point_out.y))
-  );
-  cv::LineIterator it = backing_off_line_iterator;
+  // but the backing off directions based on priority
+  float backing_off_angles[2] = {
+    obstacle_normal_angles[backing_off_angle_idx],
+    obstacle_normal_angles[1 - backing_off_angle_idx]
+  };
 
   bool is_obstacle = false;
-  cv::Point new_obstacle_point;
-  for (size_t i = 0; i < backing_off_line_iterator.count; i++, it++)
+
+  for (size_t angle_idx = 0; angle_idx < 2; angle_idx++)
   {
-    if (map.at<uint8_t>(it.pos()) == 255)
+    float backing_off_angle = backing_off_angles[angle_idx];
+    for (size_t obstacle_check_idx = 0; obstacle_check_idx < 3; obstacle_check_idx++)
     {
-      is_obstacle = true;
-      new_obstacle_point = it.pos();
+      float clearance = OBSTACLE_CLEARANCE_DISTANCE / map_resolution;
+      float clearance_2 = clearance * 2;
+      object_point_out.x = round(obstacle_point.x + clearance_2 * cos(backing_off_angle));
+      object_point_out.y = round(obstacle_point.y + clearance_2 * sin(backing_off_angle));
+      object_point_out.x = std::max( std::min(object_point_out.x, map.cols-1), 0);
+      object_point_out.y = std::max( std::min(object_point_out.y, map.rows-1), 0);
+
+      cv::LineIterator backing_off_line_iterator(
+        map, 
+        cv::Point(round(obstacle_point.x), round(obstacle_point.y)),
+        cv::Point(round(object_point_out.x), round(object_point_out.y))
+      );
+      cv::LineIterator it = backing_off_line_iterator;
+
+      cv::Point new_obstacle_point;
+      for (size_t i = 0; i < backing_off_line_iterator.count; i++, it++)
+      {
+        if (map.at<uint8_t>(it.pos()) == 255)
+        {
+          is_obstacle = true;
+          new_obstacle_point = it.pos();
+          break;
+        }
+      }
+
+      if (is_obstacle)
+      {
+        float two_obstacle_distance = cv::norm(obstacle_point - new_obstacle_point);
+        if (two_obstacle_distance < (MINIMUM_DISTANCE_BETWEEN_OBSTACLES / map_resolution))
+        {
+          continue;
+        }
+        else
+        {
+          // back-off so that you are right between the obstacles
+          float new_backoff_distance = two_obstacle_distance / 2.0;
+          // don't back off completely, go only half way of the new obstacle
+          // float new_backoff_distance = cv::norm(new_obstacle_point - obstacle_point) / 2.0;
+          object_point_out.x = round(obstacle_point.x + new_backoff_distance * cos(backing_off_angle));
+          object_point_out.y = round(obstacle_point.y + new_backoff_distance * sin(backing_off_angle));
+          object_point_out.x = std::max( std::min(object_point_out.x, map.cols-1), 0);
+          object_point_out.y = std::max( std::min(object_point_out.y, map.rows-1), 0);
+          is_obstacle = false;
+          break;
+        }
+      }
+      else
+      {
+        object_point_out.x = round(obstacle_point.x + clearance * cos(backing_off_angle));
+        object_point_out.y = round(obstacle_point.y + clearance * sin(backing_off_angle));
+        object_point_out.x = std::max( std::min(object_point_out.x, map.cols-1), 0);
+        object_point_out.y = std::max( std::min(object_point_out.y, map.rows-1), 0);
+        break;
+      }
+    }
+
+    if (!is_obstacle)
+    {
       break;
+    }
+    else
+    {
+      ROS_WARN("original backing off direction infeasible, taking another");
     }
   }
 
   if (is_obstacle)
   {
-    // don't back off completely, go only half way of the new obstacle
-    float new_backoff_distance = cv::norm(new_obstacle_point - obstacle_point) / 2.0;
-    object_point_out.x = round(obstacle_point.x + new_backoff_distance * cos(backing_off_angle));
-    object_point_out.y = round(obstacle_point.y + new_backoff_distance * sin(backing_off_angle));
-    object_point_out.x = std::max( std::min(object_point_out.x, map.cols-1), 0);
-    object_point_out.y = std::max( std::min(object_point_out.y, map.rows-1), 0);
+    ROS_ERROR("both backing off infeasible");
+    return 1;
   }
+
 
   cv::Mat R_w_rp = theta2RotationMatrix(RP_theta);
   cv::Mat R_w_vl1 = theta2RotationMatrix(ol_theta[0]);
@@ -460,75 +519,116 @@ int LinearMotionModel::chooseObstacleDirection(
     destination_points[i].y = std::max( std::min(destination_points[i].y, map.rows-1), 0);
   }
 
-  float object2destinations_distance[2];
-  for (size_t i = 0; i < 2; i++)
-  {
-    object2destinations_distance[i] = sqrt(
-      pow(destination_points[i].x - current_object_point_.x, 2) +
-      pow(destination_points[i].y - current_object_point_.y, 2)
-    ) * map_resolution;
-  }
+  cv::Point2f original_object_destination_vector(
+    current_destination_point_.x - current_object_point_.x,
+    current_destination_point_.y - current_object_point_.y
+  );
+  original_object_destination_vector /= cv::norm(original_object_destination_vector);
 
-  float previous2currentdestinations_distance[2];
-  for (size_t i = 0; i < 2; i++)
-  {
-    previous2currentdestinations_distance[i] = sqrt(
-      pow(destination_points[i].x - previous_destination_point_.x, 2) +
-      pow(destination_points[i].y - previous_destination_point_.y, 2)
-    ) * map_resolution;
-  }
+  cv::Point2f current_object_destinations_vector[2];
 
-  // all three costs for the two directions
-  float costs[2][3];
+  int chosen_idx = -1;
+  bool is_going_back = true;
   for (size_t i = 0; i < 2; i++)
   {
-    costs[i][0] = fabs(angle_object_wall[i]) / M_PI;
-    costs[i][1] = previous2currentdestinations_distance[i] / PREDICTION_LOOKAHEAD_DISTANCE;
-    costs[i][2] = 1.0/(1.0 + (object2destinations_distance[i] / PREDICTION_LOOKAHEAD_DISTANCE)) * 2.0;
-  }
-  
-  // winners for the three costs
-  int cost_winners[3];
-  for (size_t j = 0; j < 3; j++)
-  if ( fabs(costs[0][j] - costs[1][j]) < NORMALIZED_COST_THRESHOLD)
-  {
-    cost_winners[j] = 0;
-  }
-  else
-  {
-    cost_winners[j] = costs[1][j] < costs[0][j] ? 1 : -1;  
-  }
-  
-  object2destinations_distance[1] > object2destinations_distance[0] ? 1 : 0;
+    current_object_destinations_vector[i] = cv::Point2f(
+      destination_points[i].x - object_point_out.x,
+      destination_points[i].y - object_point_out.y
+    );
+    current_object_destinations_vector[i] /= cv::norm(current_object_destinations_vector[i]);
 
-  float total_cost[2] = {0, 0};
-  float cost_weights[3] = {10, 2, 1};
-  for (size_t i = 0; i < 2; i++)
-  {
-    for (size_t j = 0; j < 3; j++)
+    if (
+          fabs(
+            fabs(
+              acos(original_object_destination_vector.dot(current_object_destinations_vector[i])) 
+            ) - M_PI // 180 degree
+          ) < 10 * M_PI / 180
+        )
     {
-      if (cost_winners[j])
+      chosen_idx = 1 - i;
+    }
+    else
+    {
+      is_going_back &= false
+    }
+
+  }
+
+  if (!is_going_back)
+  {
+    float object2destinations_distance[2];
+    for (size_t i = 0; i < 2; i++)
+    {
+      object2destinations_distance[i] = sqrt(
+        pow(destination_points[i].x - current_object_point_.x, 2) +
+        pow(destination_points[i].y - current_object_point_.y, 2)
+      ) * map_resolution;
+    }
+
+    float previous2currentdestinations_distance[2];
+    for (size_t i = 0; i < 2; i++)
+    {
+      previous2currentdestinations_distance[i] = sqrt(
+        pow(destination_points[i].x - previous_destination_point_.x, 2) +
+        pow(destination_points[i].y - previous_destination_point_.y, 2)
+      ) * map_resolution;
+    }
+
+    // all three costs for the two directions
+    float costs[2][3];
+    for (size_t i = 0; i < 2; i++)
+    {
+      costs[i][0] = fabs(angle_object_wall[i]) / M_PI;
+      costs[i][1] = previous2currentdestinations_distance[i] / PREDICTION_LOOKAHEAD_DISTANCE;
+      costs[i][2] = 1.0/(1.0 + (object2destinations_distance[i] / PREDICTION_LOOKAHEAD_DISTANCE)) * 2.0;
+    }
+    
+    // winners for the three costs
+    int cost_winners[3];
+    for (size_t j = 0; j < 3; j++)
+    if ( fabs(costs[0][j] - costs[1][j]) < NORMALIZED_COST_THRESHOLD)
+    {
+      // there is no clear winner
+      cost_winners[j] = 0;
+    }
+    else
+    {
+      cost_winners[j] = costs[1][j] < costs[0][j] 
+                        ? 1 
+                        : -1;  
+    }
+    
+    object2destinations_distance[1] > object2destinations_distance[0] ? 1 : 0;
+
+    float total_cost[2] = {0, 0};
+    float cost_weights[3] = {10, 2, 1};
+    for (size_t i = 0; i < 2; i++)
+    {
+      for (size_t j = 0; j < 3; j++)
       {
-        // we have a clear winner (the cost wasn't similar)
-        total_cost[i] += cost_weights[j] * costs[i][j];
+        if (cost_winners[j])
+        {
+          // we have a clear winner (the cost wasn't similar)
+          total_cost[i] += cost_weights[j] * costs[i][j];
+        }
       }
     }
+
+    ROS_INFO(
+      "Wall1: %f, Opposite wall: %f",
+      ol_theta[0] * 180 / M_PI,
+      ol_theta[1] * 180 / M_PI
+    );
+    ROS_INFO("Winners: %d, %d, %d", cost_winners[0], cost_winners[1], cost_winners[2]);
+    ROS_INFO(
+      "Cost[0]: %f, %f, %f, Cost[1]: %f, %f, %f", 
+      costs[0][0], costs[0][1], costs[0][2],
+      costs[1][0], costs[1][1], costs[1][2]
+    );
+
+    // TODO: filter out any prediction that is going towards the object
+    chosen_idx = (total_cost[1] < total_cost[0]) ? 1 : 0;
   }
-
-  ROS_INFO(
-    "Wall1: %f, Opposite wall: %f",
-    ol_theta[0] * 180 / M_PI,
-    ol_theta[1] * 180 / M_PI
-  );
-  ROS_INFO("Winners: %d, %d, %d", cost_winners[0], cost_winners[1], cost_winners[2]);
-  ROS_INFO(
-    "Cost[0]: %f, %f, %f, Cost[1]: %f, %f, %f", 
-    costs[0][0], costs[0][1], costs[0][2],
-    costs[1][0], costs[1][1], costs[1][2]
-  );
-
-  // TODO: filter out any prediction that is going towards the object
-  int chosen_idx = (total_cost[1] < total_cost[0]) ? 1 : 0;
   destination_point_out = destination_points[chosen_idx];
 
   ROS_INFO(

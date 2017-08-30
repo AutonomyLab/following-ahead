@@ -1,9 +1,3 @@
-#define CAM_WRT_LASER_X -0.03
-#define CAM_WRT_LASER_Y 0.0
-#define CAM_WRT_LASER_Z 0.094
-#define CAM_WRT_LASER_PITCH 5
-#define PERSON_LOST_TIMEOUT 2
-
 #include "ros/ros.h"
 #include "yolo2/ImageDetections.h"
 #include <std_msgs/Bool.h>
@@ -29,6 +23,7 @@
 
 #include "robot.hpp"
 #include "utils.hpp"
+#include "config.h"
 #include "ocamcalib/ocam_functions.h"
 
 #include <sstream>
@@ -198,7 +193,6 @@ public:
 
     ros::Time send_time = ros::Time::now();
 
-    // TODO: don't just use the first detection
     int selected_person_idx = -1;
     float min_leg_dist = 100;
 
@@ -207,7 +201,6 @@ public:
           tracking_status_ == tracking_status_t::PERSON_UNDER_CONSIDERATION
         )
     {
-      min_leg_dist = DEPTH_LIMIT_TRACKING;
       for (size_t person_idx = 0; person_idx < detectionsMsg->people.size(); person_idx++)
       {  
         float leg_dist = sqrt(

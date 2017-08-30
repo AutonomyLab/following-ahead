@@ -10,5 +10,10 @@
         	<arg name="laser_frame_back" value="$(arg laser_frame_back)" />
         </include>
         <include file="$(find person_follower)/launch/camera.launch" />
+        <!-- <node pkg="joy" type="joy_node" name="joy_node" output="screen">
+			<remap from="/joy" to="/teleop/joy" />
+			<param name="dev" type="string" value="/dev/input/js0" />
+			<param name="autorepeat_rate" value="10" />
+		</node> -->
     </group>
 </launch>

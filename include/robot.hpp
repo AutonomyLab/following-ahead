@@ -97,6 +97,8 @@ private:
 
     cv::Mat map_image_;
     nav_msgs::OccupancyGrid map_occupancy_grid_;
+
+    double blob_measurements_timeout_;
 public:
     Robot(  ros::NodeHandle n, 
             std::string base_frame, std::string odom_frame, 
@@ -115,6 +117,7 @@ public:
     int calculateDistination(cv::Point3f&);
 
     void publishZeroCmdVel();
+    void sendNavGoal();
 
     class OdometryException: public std::exception
     {

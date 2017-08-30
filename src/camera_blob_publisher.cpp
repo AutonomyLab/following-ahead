@@ -1,9 +1,3 @@
-#define CAM_WRT_LASER_X -0.075
-#define CAM_WRT_LASER_Y -0.01
-#define CAM_WRT_LASER_Z 0.174
-
-#define CAM_WRT_LASER_PITCH 16.5
-
 #include "ros/ros.h"
 #include "yolo2/ImageDetections.h"
 #include <std_msgs/Bool.h>
@@ -24,6 +18,7 @@
 #include <geometry_msgs/TransformStamped.h>
 #include "robot.hpp"
 #include "utils.hpp"
+#include "config.h"
 
 #include <sstream>
 
@@ -38,7 +33,17 @@
 
 class CameraBlobPublisher
 {
+public:
+  enum tracking_status_t {
+    PERSON_SELECTED,
+    PERSON_UNDER_CONSIDERATION,
+    LOST
+  };
+
 private:
+  tracking_status_t tracking_status_;
+  size_t num_seen_person_under_consideration_; 
+
   ros::Publisher pubPointCloud_;
   ros::Publisher pubRelativePose_;
   sensor_msgs::PointCloud::Ptr pointCloudMsg_;
@@ -49,43 +54,57 @@ private:
   float camera_wrt_laser_y_;
   float camera_wrt_laser_z_;
   float camera_wrt_laser_pitch_;
-  bool track_person_;
   std::string camera_parent_frame_;
+
+  double person_lost_timeout_;
+  double last_update_time_;
 
 public:
   CameraBlobPublisher(ros::NodeHandle n)
     : nh_(n),
-      pointCloudMsg_(new sensor_msgs::PointCloud)
+      pointCloudMsg_(new sensor_msgs::PointCloud),
+      tracking_status_(tracking_status_t::LOST),
+      num_seen_person_under_consideration_(0)
   {
-    track_person_ = false;
     pubPointCloud_ =  nh_.advertise<sensor_msgs::PointCloud>("person_cloud", 1);
     pubRelativePose_ = nh_.advertise<geometry_msgs::TransformStamped>("/person_follower/groundtruth_pose", 1);
-  
-    if (!nh_.getParam("camera_wrt_laser_x", camera_wrt_laser_x_))
+    
+    nh_.param("person_lost_timeout", person_lost_timeout_, (double)PERSON_LOST_TIMEOUT);
+    nh_.param("camera_wrt_laser_x", camera_wrt_laser_x_, (float)CAM_WRT_LASER_X);
+    nh_.param("camera_wrt_laser_y", camera_wrt_laser_y_, (float)CAM_WRT_LASER_Y);
+    nh_.param("camera_wrt_laser_z", camera_wrt_laser_z_, (float)CAM_WRT_LASER_Z);
+    nh_.param("camera_wrt_laser_pitch", camera_wrt_laser_pitch_, (float)CAM_WRT_LASER_PITCH);
+    nh_.param("camera_parent_frame", camera_parent_frame_, std::string("laser"));
+  }
+
+  cv::Point3f findPersonCenter(cv_bridge::CvImageConstPtr cv_ptr, std::vector<cv::Point2f> vectPersonPoints, std::vector<float> depthValues)
+  {
+    // find the center of the person
+    int max_x = -1;
+    int min_x = cv_ptr->image.cols + 1;
+    
+    for (size_t i = 0; i < vectPersonPoints.size(); i++)
     {
-      camera_wrt_laser_x_ = CAM_WRT_LASER_X;
+      if (vectPersonPoints[i].x > max_x)
+      {
+        max_x = vectPersonPoints[i].x;
+      }
+
+      if (vectPersonPoints[i].x < min_x)
+      {
+        min_x = vectPersonPoints[i].x;
+      }
     }
 
-    if (!nh_.getParam("camera_wrt_laser_y", camera_wrt_laser_y_))
-    {
-      camera_wrt_laser_y_ = CAM_WRT_LASER_Y;
-    }
+    size_t medianIdx = depthValues.size()/2;
+    std::nth_element(depthValues.begin(), depthValues.begin()+medianIdx, depthValues.end());
+    float person_z = depthValues[medianIdx];
 
-    if (!nh_.getParam("camera_wrt_laser_z", camera_wrt_laser_z_))
-    {
-      camera_wrt_laser_z_ = CAM_WRT_LASER_Z;
-    }
+    float person_x = (min_x + max_x) / 2.0;
+    person_x = (person_x - cameraPrincipalX)/focalLengthX*person_z;
+    float person_y = 0;
 
-    if (!nh_.getParam("camera_wrt_laser_pitch", camera_wrt_laser_pitch_))
-    {
-      camera_wrt_laser_pitch_ = CAM_WRT_LASER_PITCH;
-    }
-
-    if (!nh_.getParam("camera_parent_frame", camera_parent_frame_))
-    {
-      camera_parent_frame_ = "laser";
-    }
-
+    return cv::Point3f(person_x, person_y, person_z);
   }
 
   void detectionCallback(const yolo2::ImageDetections::ConstPtr &detectionMsg, const sensor_msgs::Image::ConstPtr &depthMsg)
@@ -95,11 +114,30 @@ public:
     std::vector<float> depthValues;
     std::vector<cv::Point2f> vectPersonPoints;
     
+    std::vector<cv::Point2f> vectPersonPointsBak;
+    std::vector<float> depthValuesBak;
+
+    std::vector<float> vectCandidateMedianDepths;
+    vectCandidateMedianDepths.reserve(detectionMsg->detections.size());
+
+    std::vector< std::vector<float> > vectCandidateDepthValues;
+    vectCandidateDepthValues.reserve(detectionMsg->detections.size());
+
+    std::vector< std::vector<cv::Point2f> > vectCandidatePoints;
+    vectCandidatePoints.reserve(detectionMsg->detections.size());
+
+    std::vector< cv::Point3f > vectCandidateCenter;
+    vectCandidateCenter.reserve(detectionMsg->detections.size());    
+
     cv_bridge::CvImageConstPtr cv_ptr;
     cv_ptr = cv_bridge::toCvShare(depthMsg);
 
     // cv::Mat matPersonSegmented = cv::Mat::zeros(depthMsg->height, depthMsg->width, CV_8UC1);
     
+    ros::Time send_time = ros::Time::now();
+    int selected_person_idx = -1;
+    float min_leg_dist = 100;
+
     for (int i=0; i<detectionMsg->detections.size(); i++)
     {
       if (detectionMsg->detections[i].class_id != 0)
@@ -107,19 +145,6 @@ public:
         continue;
       }
 
-      // if (vectPersonPoints.size())
-      // {
-      //   // another person, don't care
-      //   break;
-      // }
-      
-      // Stg::ModelBlobfinder  myFinder;
-      // std::cout << detectionMsg->detections[i].class_id << std::endl;
-      // std::cout << detectionMsg->detections[i].x << ", " << detectionMsg->detections[i].y << std::endl;
-      // std::cout << detectionMsg->detections[i].width << ", " << detectionMsg->detections[i].height << std::endl << std::endl  ;
-      // // myFinder.fov = 70.0*M_PI/180.0;
-      // myFinder.
-    
       for (
             int row=detectionMsg->detections[i].roi.y_offset; 
             row<detectionMsg->detections[i].roi.y_offset+detectionMsg->detections[i].roi.height;
@@ -155,12 +180,18 @@ public:
       if (vectPersonPoints.size() == 0)
       {
         ROS_WARN("No point in person: %d", i);
+        vectCandidatePoints.push_back(vectPersonPoints);
+        vectCandidateDepthValues.push_back(depthValues);
+        vectCandidateMedianDepths.push_back(0);
+        vectCandidateCenter.push_back(cv::Point3f(0, 0, 0));
         continue;
       }
 
       size_t medianIdx = depthValues.size()/2;
       std::nth_element(depthValues.begin(), depthValues.begin()+medianIdx, depthValues.end());
       float medianDepth = depthValues[medianIdx];
+
+      vectCandidateMedianDepths.push_back(medianDepth);
 
       std::vector<cv::Point2f> vectPersonPointsSegmented;
       std::vector<float> depthValuesSegmented;
@@ -184,30 +215,111 @@ public:
       vectPersonPoints = vectPersonPointsSegmented;
       depthValues = depthValuesSegmented;
 
+      vectCandidatePoints.push_back(vectPersonPoints);
+      vectCandidateDepthValues.push_back(depthValues);
+
       if (vectPersonPoints.size()==0)
       {
         continue;
       }
 
-      if (track_person_)
-      {  
-        if ( fabs(fabs(human_prev_pose_.z) - fabs(medianDepth)) < DEPTH_LIMIT_TRACKING )
+      vectCandidateCenter.push_back(
+        findPersonCenter(cv_ptr, vectPersonPoints, depthValues)
+      );
+
+      if  (
+            tracking_status_ == tracking_status_t::PERSON_SELECTED ||
+            tracking_status_ == tracking_status_t::PERSON_UNDER_CONSIDERATION
+          )
+      {
+        float leg_dist = cv::norm(vectCandidateCenter[i] - human_prev_pose_);
+        if  ( 
+               leg_dist < min_leg_dist 
+            )
         {
-          human_prev_pose_.z =  medianDepth;
-          break;
+          if (tracking_status_ == tracking_status_t::PERSON_UNDER_CONSIDERATION)
+          {
+            num_seen_person_under_consideration_++;
+            ROS_INFO("person under consideration %d", num_seen_person_under_consideration_);
+            // TODO: softcode this number
+            if (num_seen_person_under_consideration_ > 10)
+            {
+              tracking_status_ = tracking_status_t::PERSON_SELECTED;
+              ROS_INFO("person selected");
+            }
+          }
+
+          last_update_time_ = send_time.toSec();
+          // TODO: use all x, y, z for distance
+          human_prev_pose_ = vectCandidateCenter[i];
+          selected_person_idx = i;
+          min_leg_dist = leg_dist;
+          // backup the points because they need
+          vectPersonPointsBak = vectPersonPoints;
+          depthValuesBak = depthValues;
+          // clear for the next person
+          vectPersonPoints.clear();
+          depthValues.clear();
+          continue;
         }
-        else
+      }  
+    }
+    
+
+    // the points for the best candidate found 
+    vectPersonPoints = vectPersonPointsBak;
+    depthValues = depthValuesBak;
+
+    if (selected_person_idx == -1)
+    {
+      //find the closest one
+      for (size_t person_idx = 0; person_idx < detectionMsg->detections.size(); person_idx++)
+      { 
+        float leg_dist = cv::norm(vectCandidateCenter[person_idx]);
+        
+        if (leg_dist <= 0)
         {
           continue;
         }
-      }
-      else
-      {
-        // TODO: something better
-        continue;
+
+        if (leg_dist < min_leg_dist)
+        {
+          selected_person_idx = person_idx;
+          min_leg_dist = leg_dist;
+        }
       }
 
+      if (selected_person_idx != -1)
+      {
+        // we found the closest one
+        tracking_status_ = tracking_status_t::PERSON_UNDER_CONSIDERATION;
+        num_seen_person_under_consideration_ = 0;
+        human_prev_pose_ = vectCandidateCenter[selected_person_idx];
+        ROS_INFO("Person is under consideration");
+      } 
+      else
+      {
+        // nothing found, but still try to track the person later
+        if (fabs(send_time.toSec() - last_update_time_) > person_lost_timeout_)
+        {
+          num_seen_person_under_consideration_ = 0;
+          tracking_status_ = tracking_status_t::LOST;
+          ROS_INFO("PERSON LOST!!");
+        }
+        else
+        {
+          ROS_INFO("Waiting for person to return");
+        }
+      }
     }
+
+
+    if (tracking_status_ != tracking_status_t::PERSON_SELECTED || selected_person_idx==-1)
+    {
+      ROS_WARN("Person not selected");
+      return;
+    }
+    
 
     // cv::imshow("window", matPersonSegmented);
     // cv::waitKey(5);
@@ -215,14 +327,11 @@ public:
     if (vectPersonPoints.size()==0)
     {
       ROS_WARN("No detection");
-      track_person_ = false;
       return;
     }
-    else
-    {
-      track_person_ = true;
-    }
 
+    vectPersonPoints = vectCandidatePoints[selected_person_idx];
+    depthValues = vectCandidateDepthValues[selected_person_idx];
 
     // cv::Mat cameraMatrix = cv::Mat::eye(3, 3, CV_32F);
     // cameraMatrix.at<float>(0, 0) = focalLengthX;
@@ -270,37 +379,13 @@ public:
     }
     pubPointCloud_.publish(pointCloudMsg_);
 
-    // find the center of the person
-    int max_x = -1;
-    int min_x = cv_ptr->image.cols + 1;
-    
-    for (size_t i = 0; i < vectPersonPoints.size(); i++)
-    {
-      if (vectPersonPoints[i].x > max_x)
-      {
-        max_x = vectPersonPoints[i].x;
-      }
-
-      if (vectPersonPoints[i].x < min_x)
-      {
-        min_x = vectPersonPoints[i].x;
-      }
-    }
-
-    size_t medianIdx = depthValues.size()/2;
-    std::nth_element(depthValues.begin(), depthValues.begin()+medianIdx, depthValues.end());
-    float person_z = depthValues[medianIdx];
-
-    float person_x = (min_x + max_x) / 2.0;
-    person_x = (person_x - cameraPrincipalX)/focalLengthX*person_z;
-    float person_y = 0;
-    human_prev_pose_ = cv::Point3f(person_x,person_y,person_z);
+    human_prev_pose_ = vectCandidateCenter[selected_person_idx];
     geometry_msgs::TransformStamped transform_stamped;
     transform_stamped.header.stamp = ros::Time::now();
     transform_stamped.header.frame_id = "camera";
-    transform_stamped.transform.translation.x = person_x;
-    transform_stamped.transform.translation.y = person_y;
-    transform_stamped.transform.translation.z = person_z;
+    transform_stamped.transform.translation.x = vectCandidateCenter[selected_person_idx].x;
+    transform_stamped.transform.translation.y = vectCandidateCenter[selected_person_idx].y;
+    transform_stamped.transform.translation.z = vectCandidateCenter[selected_person_idx].z;
 
     transform_stamped.transform.rotation.x = 0;
     transform_stamped.transform.rotation.y = 0;

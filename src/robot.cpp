@@ -50,6 +50,8 @@ Robot::Robot( ros::NodeHandle n,
 
   person_kalman_ = new PersonKalman(0.1, Q, R, P);
 
+  n.param("blob_measurement_timeout", blob_measurements_timeout_, 10.0);
+
   cmd_vel_publisher =  n.advertise<geometry_msgs::Twist>("/person_follower/zero_cmd_vel", 1);
   pub_particles_ = n.advertise<sensor_msgs::PointCloud>("person_particle", 1);
   
@@ -338,19 +340,28 @@ void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& 
   current_odometry_ = *msg;
   float dt = current_relative_pose_.header.stamp.toSec() - previous_relative_pose_.header.stamp.toSec();
 
+  // check if we are still getting blob readings
   if (
         current_relative_pose_.header.stamp.toSec() &&  // is valid
         previous_relative_pose_.header.stamp.toSec() && // is valid
-        current_relative_pose_.header.stamp.toSec() <= previous_relative_pose_.header.stamp.toSec()
+        dt <= 0
       )
   {
-    // no new blob measurement, just go to the last destination
-    //?
-
-    cv::Mat state = person_kalman_->state();
-    ROS_WARN("person speed: %f theta: %f", state.at<float>(VEL_IDX, 0),  state.at<float>(THETA_IDX, 0) * 180 / M_PI );
-    throw OdometryException();
-
+    if  (
+          !isDeadManActive ||
+          ros::Time::now().toSec() - current_relative_pose_.header.stamp.toSec() > blob_measurements_timeout_
+        )
+    {  
+        cv::Mat state = person_kalman_->state();
+        ROS_WARN("person speed: %f theta: %f", state.at<float>(VEL_IDX, 0),  state.at<float>(THETA_IDX, 0) * 180 / M_PI );
+        throw OdometryException();
+    }
+    else
+    {
+      // no new blob measurement, just go to the last destination
+      ROS_WARN("no new blob measurement, just going to the last destination");
+      return;  
+    }
   }
 
   // if the time between current and previous is too large (when we lose the person), reinitialize the filters 
@@ -683,35 +694,18 @@ void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& 
     prediction_local_ = transformPoint(r0_T_map, prediction_global_);
     // angle of the prediction with respect to the robots x axis
     double prediction_angle = atan2(prediction_local_.y, prediction_local_.x);
-    static double nav_goal_last_sent = 0;
-    if (
-      // true
-      isDeadManActive && 
-      fabs(prediction_angle) < 120. * M_PI / 180.  // don't follow if robot is behind
-    )
+    if  (
+          // true
+          isDeadManActive && 
+          fabs(prediction_angle) < 120. * M_PI / 180.  // don't follow if robot is behind
+        )
     {
-      if (ros::Time::now().toSec() - nav_goal_last_sent > 1.0)
-      {
-        move_base_msgs::MoveBaseGoal nav_goal_msg;
-
-        nav_goal_msg.target_pose.header.stamp = ros::Time::now();
-        nav_goal_msg.target_pose.header.frame_id = map_frame_;
-        nav_goal_msg.target_pose.pose.position.x = prediction_global_.x;
-        nav_goal_msg.target_pose.pose.position.y = prediction_global_.y;
-        nav_goal_msg.target_pose.pose.position.z = 0;
-        nav_goal_msg.target_pose.pose.orientation.x = q.x();
-        nav_goal_msg.target_pose.pose.orientation.y = q.y();
-        nav_goal_msg.target_pose.pose.orientation.z = q.z();
-        nav_goal_msg.target_pose.pose.orientation.w = q.w();
-        move_base_client_ptr_->sendGoal(nav_goal_msg);
-
-        nav_goal_last_sent = ros::Time::now().toSec();
-      } 
+      sendNavGoal();
     }
     else // if (!isDeadManActive)
     {
       // cancel anything that's going on
-      ROS_WARN("deadman off or prediction behind, reinitializing");
+      ROS_WARN("deadman off or goal behind the robot, reinitializing");
       person_kalman_->reintialize();
       prediction_particle_filter_.reintialize();
       throw OdometryException();
@@ -719,10 +713,8 @@ void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& 
   }
   else
   {
-    // ROS_WARN(
-    //   "High error: %f, %f, %f, %f", 
-    //   velocity_stddev, theta_stddev, target_x_stddev, target_y_stddev
-    // );
+    // sendNavGoal();
+    ROS_WARN("Person velocity low, going to last destination");
   }
   
 }
@@ -730,5 +722,31 @@ catch(OdometryException &e)
 {
   if (!isDeadManActive)
     publishZeroCmdVel();
+}
+
+void Robot::sendNavGoal()
+{
+  static double nav_goal_last_sent = 0;
+  
+  tf::Quaternion q;
+  q.setRPY(0, 0, prediction_global_.z);
+
+  if (ros::Time::now().toSec() - nav_goal_last_sent > 1.0)
+  {
+    move_base_msgs::MoveBaseGoal nav_goal_msg;
+
+    nav_goal_msg.target_pose.header.stamp = ros::Time::now();
+    nav_goal_msg.target_pose.header.frame_id = map_frame_;
+    nav_goal_msg.target_pose.pose.position.x = prediction_global_.x;
+    nav_goal_msg.target_pose.pose.position.y = prediction_global_.y;
+    nav_goal_msg.target_pose.pose.position.z = 0;
+    nav_goal_msg.target_pose.pose.orientation.x = q.x();
+    nav_goal_msg.target_pose.pose.orientation.y = q.y();
+    nav_goal_msg.target_pose.pose.orientation.z = q.z();
+    nav_goal_msg.target_pose.pose.orientation.w = q.w();
+    move_base_client_ptr_->sendGoal(nav_goal_msg);
+
+    nav_goal_last_sent = ros::Time::now().toSec();
+  } 
 }
 

@@ -54,7 +54,7 @@
 // Infinite impulse response (IIR) filter for velocity and orientation
 // higher these values, more importance to the new readings
 #define VEL_IIR_ALPHA 0.3
-#define THETA_IIR_ALPHA 0.6 // 0.01
+#define THETA_IIR_ALPHA 0.45 // 0.01
 
 // process noise during the prediction step of EKF
 #define X_T_PROCESS_NOISE_VAR 0.01
@@ -86,7 +86,9 @@
 #define ROBOT_VELOCITY_VARIANCE_SCALING 0.5
 
 // lookahead distance (m) for prediction
-#define PREDICTION_LOOKAHEAD_DISTANCE 4.5
+#define PREDICTION_LOOKAHEAD_DISTANCE 2.5 //4.5
+
+#define MINIMUM_DISTANCE_BETWEEN_OBSTACLES 0.7
 
 // maximum orientation change between two iterations (used for calculating probability of the measurement)
 #define MAX_DEL_THETA 0.17453292519943295 // 10 degrees
@@ -100,14 +102,21 @@
 #define OCCUPANCY_THRESHOLD 70
 #define OBSTACLE_RAYCASTING_PERTURBATION 5
 // distance to maintain from the obstacles (for the motion model)
-#define OBSTACLE_CLEARANCE_DISTANCE 0.6
+#define OBSTACLE_CLEARANCE_DISTANCE 1.5
 // the normalized cost difference below this will count as a draw
-#define NORMALIZED_COST_THRESHOLD 0.1
+#define NORMALIZED_COST_THRESHOLD 0.04
 // dilation to inflate obstacles in map (in meters)
 #define OBSTACLE_INFLATION 0.35
 #define DESTINATION_EXTENTION_PERCENTAGE 1.2
 
+#define PERSON_LOST_TIMEOUT 2
+
 #define FOV 70.0
+
+#define CAM_WRT_LASER_X -0.03
+#define CAM_WRT_LASER_Y 0.0
+#define CAM_WRT_LASER_Z 0.094
+#define CAM_WRT_LASER_PITCH 5
 
 static const float g_fov = FOV*M_PI/180.0;
 static const float focalLengthX = 300.4547119140625;
