@@ -201,7 +201,7 @@ public:
           tracking_status_ == tracking_status_t::PERSON_UNDER_CONSIDERATION
         )
     {
-       // min_leg_dist = MIN_SOMETHING; TODO
+      min_leg_dist = DEPTH_LIMIT_TRACKING;
       for (size_t person_idx = 0; person_idx < detectionsMsg->people.size(); person_idx++)
       {  
         float leg_dist = sqrt(
