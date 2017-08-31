@@ -48,6 +48,7 @@ public:
   };
 
 private:
+  bool is_yolo_valid_;
   tracking_status_t tracking_status_;
   size_t num_seen_person_under_consideration_; 
 
@@ -130,7 +131,7 @@ public:
       pointCloudMsg_(new sensor_msgs::PointCloud),
       image_transport_(n),
       tracking_status_(tracking_status_t::LOST),
-      num_seen_person_under_consideration_(0)
+      num_seen_person_under_consideration_(0), is_yolo_valid_(false)
   {
     pubPointCloud_ =  nh_.advertise<sensor_msgs::PointCloud>("person_cloud", 1);
     pubRelativePose_ = nh_.advertise<geometry_msgs::TransformStamped>("/person_follower/groundtruth_pose", 1);
@@ -194,7 +195,7 @@ public:
     ros::Time send_time = ros::Time::now();
 
     int selected_person_idx = -1;
-    float min_leg_dist = 100;
+    float min_leg_dist = 3.5;
 
     if  (
           tracking_status_ == tracking_status_t::PERSON_SELECTED ||
@@ -237,6 +238,13 @@ public:
     
     if (selected_person_idx == -1)
     {
+        if (!is_yolo_valid_)
+        {
+          ROS_WARN("Yolo is not valid and person lost, going to prev destination");
+          num_seen_person_under_consideration_ = 0;
+          tracking_status_ = tracking_status_t::LOST;
+          return;
+        }
       // the transformation from map frame to laser frame
       tf::StampedTransform camera_T_map;
       try
@@ -375,6 +383,7 @@ public:
       measurement_seed.pos.x = human_prev_pose_.y;
       measurement_seed.pos.x = human_prev_pose_.z; 
       pubPositionMeasurementSeeds_.publish(measurement_seed);
+      is_yolo_valid_ = false;
       return;
       // nothing found, but still try to track the person later
       // if (fabs(send_time.toSec() - last_update_time_) > person_lost_timeout_)
@@ -388,7 +397,7 @@ public:
       //   ROS_INFO("Waiting for person to return");
       // }
     }
-
+    is_yolo_valid_ = true;
     sensor_msgs::LaserScan laserMsgFiltered = *laserMsg;
 
     // bearing angles of endpoints
