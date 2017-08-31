@@ -217,7 +217,7 @@ public:
             num_seen_person_under_consideration_++;
             ROS_INFO("person under consideration %d", num_seen_person_under_consideration_);
             // TODO: softcode this number
-            if (num_seen_person_under_consideration_ > 10)
+            if (num_seen_person_under_consideration_ > 4)
             {
               tracking_status_ = tracking_status_t::PERSON_SELECTED;
               ROS_INFO("person selected");
@@ -365,6 +365,17 @@ public:
     {
       // give the whole laser readings and hope it will find it
       pubFilteredLaser_.publish(*laserMsg);
+
+      people_msgs::PositionMeasurement measurement_seed;
+      measurement_seed.header.stamp = send_time;
+      measurement_seed.header.frame_id = map_frame_;
+      measurement_seed.name = "person";
+      measurement_seed.object_id = "0";
+      measurement_seed.pos.x = human_prev_pose_.x;
+      measurement_seed.pos.x = human_prev_pose_.y;
+      measurement_seed.pos.x = human_prev_pose_.z; 
+      pubPositionMeasurementSeeds_.publish(measurement_seed);
+      return;
       // nothing found, but still try to track the person later
       // if (fabs(send_time.toSec() - last_update_time_) > person_lost_timeout_)
       // {

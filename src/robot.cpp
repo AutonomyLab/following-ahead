@@ -427,6 +427,7 @@ int Robot::updateHumanPrediction(float dt)
 void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& msg) 
 {
   current_odometry_ = *msg;
+  spinOnce();
 }
 
 void Robot::spinOnce() try
@@ -839,8 +840,8 @@ void Robot::spinOnce() try
     double prediction_angle = atan2(prediction_local_.y, prediction_local_.x);
     if  (
           // true
-          isDeadManActive // && 
-          // fabs(prediction_angle) < 150. * M_PI / 180.  // don't follow if robot is behind
+          isDeadManActive && 
+          fabs(prediction_angle) < 130. * M_PI / 180.  // don't follow if robot is behind
         )
     {
       sendNavGoal();

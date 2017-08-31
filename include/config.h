@@ -42,7 +42,7 @@
 #define BLOB_NOISE_STDDEV_X 0.1
 #define BLOB_NOISE_STDDEV_Y 0.1
 
-#define DEPTH_LIMIT_TRACKING 0.5
+#define DEPTH_LIMIT_TRACKING 1
 
 // Kalman filter index:
 #define X_T_IDX 0
