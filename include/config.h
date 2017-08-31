@@ -53,8 +53,8 @@
 #define THETA_IDX 5
 // Infinite impulse response (IIR) filter for velocity and orientation
 // higher these values, more importance to the new readings
-#define VEL_IIR_ALPHA 0.3
-#define THETA_IIR_ALPHA 0.45 // 0.01
+#define VEL_IIR_ALPHA 0.5
+#define THETA_IIR_ALPHA 0.8 // 0.01
 
 // process noise during the prediction step of EKF
 #define X_T_PROCESS_NOISE_VAR 0.01
@@ -102,13 +102,16 @@
 #define OCCUPANCY_THRESHOLD 70
 #define OBSTACLE_RAYCASTING_PERTURBATION 5
 // distance to maintain from the obstacles (for the motion model)
-#define OBSTACLE_CLEARANCE_DISTANCE 1.5
+#define OBSTACLE_CLEARANCE_DISTANCE 0.6 // 1.5
 // the normalized cost difference below this will count as a draw
 #define NORMALIZED_COST_THRESHOLD 0.04
 // dilation to inflate obstacles in map (in meters)
-#define OBSTACLE_INFLATION 0.35
+#define OBSTACLE_INFLATION 0.6
 #define DESTINATION_EXTENTION_PERCENTAGE 1.2
 
+// distance to obstacle that is considered feasible for destination
+#define FEASIBLE_DESTINATION_TO_OBSTACLE_DISTANCE 0.5
+#define WAYPOINT_LOOP_LIMIT 5
 #define PERSON_LOST_TIMEOUT 2
 
 #define FOV 70.0

@@ -243,7 +243,11 @@ void Robot::mapCallback(nav_msgs::OccupancyGrid &map_msg)
   );
   dilate(map_image_, map_image_temp, dilation_element);
 
-  map_image_ = map_image_temp;
+  cv::Mat erosion_element = cv::getStructuringElement( 
+    cv::MORPH_RECT,
+    cv::Size(dilation_size * 0.5, dilation_size * 0.5)
+  );
+  erode(map_image_temp, map_image_, dilation_element);
   
 
 }
@@ -290,21 +294,49 @@ cv::Point3f Robot::updatePrediction()
 
   if (is_robot_to_prediction_feasible)
   {
-    // don't update the prediction
-    prediction_global_prev_ = prediction_global_;
-    cv::circle(debug_map, person_image_coordinates, 8, 255);
-    cv::circle(debug_map, prediction_image_coordinates, 5, 255);
+    // also check if it is very close to obstacles
+    cv::Point new_prediction_image_coordinates;
+    is_robot_to_prediction_feasible = LinearMotionModel::checkObjectDestinationFeasibility(
+      person_image_coordinates, 
+      prediction_image_coordinates, 
+      map_image_, map_occupancy_grid_.info.resolution,
+      new_prediction_image_coordinates,
+      debug_map
+    );
+
+    if (is_robot_to_prediction_feasible)
+    {
+      // don't update the prediction
+      prediction_global_prev_ = prediction_global_;
+      cv::circle(debug_map, person_image_coordinates, 8, 255);
+      cv::circle(debug_map, prediction_image_coordinates, 5, 255);
+    }
+    else
+    {
+      ROS_WARN("Destination close to obstacle, running the linear motion model on it");
+      std::cout << "prediction_image_coordinates: " << prediction_image_coordinates << std::endl;
+      // increasing the length
+      prediction_image_coordinates = new_prediction_image_coordinates;
+      std::cout << "new_prediction_image_coordinates: " << prediction_image_coordinates << std::endl;
+      
+      cv::circle(debug_map, new_prediction_image_coordinates, 15, 255);
+      is_robot_to_prediction_feasible = false;
+    
+    }
   }
-  else
+  
+  if (!is_robot_to_prediction_feasible)
   {
+    
     cv::Point new_person_image_coordinates, new_prediction_image_coordinates;
     
-    if (person_motion_model_.updatePrediction(   
-      map_image_, map_occupancy_grid_.info.resolution,
-      person_image_coordinates, prediction_image_coordinates, PREDICTION_LOOKAHEAD_DISTANCE, 
-      new_person_image_coordinates, new_prediction_image_coordinates,
-      debug_map
-    ) == 1)
+    if  ( person_motion_model_.updatePrediction(   
+            map_image_, map_occupancy_grid_.info.resolution,
+            person_image_coordinates, prediction_image_coordinates, PREDICTION_LOOKAHEAD_DISTANCE, 
+            new_person_image_coordinates, new_prediction_image_coordinates,
+            debug_map
+          ) == 1
+        )
     {
       ROS_ERROR("updatePrediction failed");
       return prediction_global_prev_;
@@ -320,6 +352,9 @@ cv::Point3f Robot::updatePrediction()
                                 orientation
                               );
   }
+  
+  
+  
 
   cv::Mat debug_map_flipped;
   cv::flip(debug_map, debug_map_flipped, 0);
@@ -696,8 +731,8 @@ void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& 
     double prediction_angle = atan2(prediction_local_.y, prediction_local_.x);
     if  (
           // true
-          isDeadManActive && 
-          fabs(prediction_angle) < 120. * M_PI / 180.  // don't follow if robot is behind
+          isDeadManActive // && 
+          // fabs(prediction_angle) < 150. * M_PI / 180.  // don't follow if robot is behind
         )
     {
       sendNavGoal();

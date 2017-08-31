@@ -42,6 +42,48 @@ public:
                             cv::Mat &debug_map
                         );
     /**
+     *
+     * @brief backing off behavior, accounting for obstacles
+     */
+    bool backoff(
+        cv::Point object_point, 
+        cv::Point obstacle_point, 
+        float backing_off_angle,
+        cv::Mat &map,
+        float map_resolution,
+        cv::Point &object_point_out
+    );
+
+    /**
+     *
+     * @brief checks if the object (person) to her destination is good (close to or beyond obstacles)
+     */
+    static bool checkObjectDestinationFeasibility(
+        cv::Point object_point, 
+        cv::Point destination_point, 
+        cv::Mat &map,
+        float map_resolution,
+        cv::Point &new_destination_point,
+        cv::Mat &debug_map
+    );
+
+    /**
+     *
+     * @brief expand predictions for raycasting between object and destination
+     */
+    static std::vector<cv::Point> expandDestination(
+      cv::Mat &map, float map_resolution,
+      cv::Point object_point, cv::Point destination_point,
+      cv::Mat &debug_map
+    );
+
+    /**
+     *
+     * @brief check obstacle between two points
+     */
+    static bool checkObstacleBetween(cv::Point point1, cv::Point point2, cv::Mat &map, cv::Mat *debug_map=NULL);
+
+    /**
      * @brief return the angle of the vector that is in the other direction (-> to <-)
      */
     float oppositeAngle(float angle);

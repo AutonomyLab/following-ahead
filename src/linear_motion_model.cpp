@@ -14,6 +14,71 @@ LinearMotionModel::LinearMotionModel(): is_first_(true)
 
 }
 
+bool LinearMotionModel::checkObstacleBetween(cv::Point point1, cv::Point point2, cv::Mat &map, cv::Mat *debug_map)
+{
+  // raycasting from object_point to prediction
+  cv::LineIterator line_iterator(map, point1, point2);
+  cv::LineIterator it = line_iterator;
+  
+  bool is_obstacle = false;
+  for(int i = 0; i < line_iterator.count; i++, ++it)
+  {
+    if (debug_map)
+    {
+      (*debug_map).at<uint8_t>(it.pos()) = 255;
+    }
+
+    if (map.at<uint8_t>(it.pos()) == 255)
+    {
+      // there is an obstacle
+      is_obstacle = true;
+      break;
+    }
+  }
+  return is_obstacle;
+}
+
+bool LinearMotionModel::checkObjectDestinationFeasibility(
+    cv::Point object_point, 
+    cv::Point destination_point, 
+    cv::Mat &map,
+    float map_resolution,
+    cv::Point &new_destination_point,
+    cv::Mat &debug_map
+)
+{
+  cv::Point2f object_destination_vector(
+    destination_point.x - object_point.x,
+    destination_point.y - object_point.y
+  );
+
+  float object_destination_norm = cv::norm(object_destination_vector);
+  cv::Point2f object_destination_unit_vector = object_destination_vector / object_destination_norm;
+  float new_object_destination_norm = object_destination_norm + FEASIBLE_DESTINATION_TO_OBSTACLE_DISTANCE/map_resolution;
+  new_destination_point.x = round(object_point.x + new_object_destination_norm * object_destination_unit_vector.x);
+  new_destination_point.y = round(object_point.y + new_object_destination_norm * object_destination_unit_vector.y);
+
+  std::vector<cv::Point> predictions = expandDestination(
+    map, map_resolution,
+    object_point, new_destination_point,
+    debug_map
+  );
+
+  bool is_obstacle = false;
+
+  for (size_t prediction_idx = 0; prediction_idx < predictions.size(); prediction_idx++)
+  {
+    is_obstacle = checkObstacleBetween(object_point, predictions[prediction_idx], map, &debug_map);
+    if (is_obstacle)
+    {
+      break;
+    }
+  }
+
+  return !is_obstacle;
+
+}
+
 int LinearMotionModel::updatePrediction(  cv::Mat &map, float map_resolution,
                                           cv::Point object_point, cv::Point destination_point, float distance, 
                                           cv::Point &object_point_out, cv::Point &destination_point_out,
@@ -30,32 +95,32 @@ int LinearMotionModel::updatePrediction(  cv::Mat &map, float map_resolution,
     is_first_ = false;
   }
 
-  debug_map = map.clone();
-  
   float remaining_distance = distance;
   float new_distance = distance;
   size_t loop_count = 0;
 
   int status = 0;
   int avoid_infinit_loop_counter = 0;
-  while (remaining_distance > 0)
+  while (remaining_distance > 0 && loop_count < WAYPOINT_LOOP_LIMIT)
   {
     ROS_INFO("Prediction iter: %d", loop_count++);
-    
-    if (
+
+    std::cout << "destination_point: " << destination_point << std::endl;
+    if  (
           updateWayPoint(   
             map, map_resolution,
             object_point, destination_point, remaining_distance,
             object_point_out,  destination_point_out, new_distance,
             debug_map
           )
-      )
+        )
     {
+      ROS_ERROR("waypoing update error");
       status = 1;
       break;
     }
     ROS_INFO("update prediction distance:%f", new_distance);
-    
+
     if (object_point == destination_point)
     {
       ROS_WARN("Object point and destination point same");
@@ -65,6 +130,31 @@ int LinearMotionModel::updatePrediction(  cv::Mat &map, float map_resolution,
     remaining_distance = new_distance;
     object_point = object_point_out;
     destination_point = destination_point_out;
+
+    if (remaining_distance <= 0 && loop_count < WAYPOINT_LOOP_LIMIT)
+    {
+      // if it's at the end
+      cv::Point new_destination_point;
+      bool is_destination_feasible = checkObjectDestinationFeasibility(
+        object_point, 
+        destination_point, 
+        map,
+        map_resolution,
+        new_destination_point,
+        debug_map
+      );
+
+      if (!is_destination_feasible)
+      {
+        std::cout << "destination_point: " << destination_point << std::endl;
+        std::cout << "new_destination_point: " << new_destination_point << std::endl;
+      
+        remaining_distance += cv::norm(new_destination_point - destination_point) * map_resolution;
+        destination_point = new_destination_point;
+        std::cout << "Infeasible destination, applying motion model again, distance increased by: " << remaining_distance << std::endl;
+        
+      }
+    }
 
     // if (remaining_distance <= 0)
     // {
@@ -102,12 +192,66 @@ int LinearMotionModel::updatePrediction(  cv::Mat &map, float map_resolution,
     //   }
     // }
   }
+
   previous_destination_point_ = destination_point_out;
 
   cv::circle(debug_map, object_point, 8, 255);
   cv::circle(debug_map, destination_point, 5, 255);
   
   return status;
+}
+
+std::vector<cv::Point> LinearMotionModel::expandDestination(
+  cv::Mat &map, float map_resolution,
+  cv::Point object_point, cv::Point destination_point,
+  cv::Mat &debug_map
+)
+{
+  cv::Point2f RP_unit_vector(
+    destination_point.x - object_point.x,
+    destination_point.y - object_point.y
+  );
+  RP_unit_vector = RP_unit_vector / cv::norm(RP_unit_vector);
+
+  cv::Point2f normal_unit_vector(
+    RP_unit_vector.y, -RP_unit_vector.x
+  );
+
+  cv::Point2f ray_endpoint1, ray_endpoint2;
+  ray_endpoint1 = cv::Point2f(destination_point.x, destination_point.y) + OBSTACLE_RAYCASTING_PERTURBATION * normal_unit_vector;
+  ray_endpoint2 = cv::Point2f(destination_point.x, destination_point.y) - OBSTACLE_RAYCASTING_PERTURBATION * normal_unit_vector;
+
+  if (debug_map.total())
+  { 
+    cv::line(
+      debug_map, 
+      cv::Point(round(ray_endpoint1.x), round(ray_endpoint1.y)),
+      cv::Point(round(ray_endpoint2.x), round(ray_endpoint2.y)), 
+      cv::Scalar(255), 1, CV_AA
+    );
+  }
+
+  // add perturbations to the destination points to get a number of rays
+  std::vector<cv::Point> predictions;
+  cv::LineIterator prediction_line_iterator(
+    map, 
+    cv::Point(round(ray_endpoint1.x), round(ray_endpoint1.y)),
+    cv::Point(round(ray_endpoint2.x), round(ray_endpoint2.y))
+  );
+
+  cv::LineIterator it = prediction_line_iterator;
+  for (size_t i = 0; i < prediction_line_iterator.count; i++, it++)
+  {
+    int x = it.pos().x;
+    int y = it.pos().y;
+    x = std::max( std::min(x, map.cols-1), 0);
+    y = std::max( std::min(y, map.rows-1), 0);
+    predictions.push_back(
+      cv::Point(x, y)
+    );
+  }
+
+  return predictions;
 }
 
 int LinearMotionModel::updateWayPoint(  cv::Mat &map, float map_resolution,
@@ -130,41 +274,11 @@ int LinearMotionModel::updateWayPoint(  cv::Mat &map, float map_resolution,
   );
   RP_unit_vector = RP_unit_vector / cv::norm(RP_unit_vector);
 
-  cv::Point2f normal_unit_vector(
-    RP_unit_vector.y, -RP_unit_vector.x
+  std::vector<cv::Point> predictions = expandDestination(
+    map, map_resolution,
+    object_point, destination_point,
+    debug_map
   );
-
-  cv::Point2f ray_endpoint1, ray_endpoint2;
-  ray_endpoint1 = cv::Point2f(destination_point.x, destination_point.y) + OBSTACLE_RAYCASTING_PERTURBATION * normal_unit_vector;
-  ray_endpoint2 = cv::Point2f(destination_point.x, destination_point.y) - OBSTACLE_RAYCASTING_PERTURBATION * normal_unit_vector;
-
-  cv::line(
-    debug_map, 
-    cv::Point(round(ray_endpoint1.x), round(ray_endpoint1.y)),
-    cv::Point(round(ray_endpoint2.x), round(ray_endpoint2.y)), 
-    cv::Scalar(150), 1, CV_AA
-  );
-
-  // add perturbations to the destination points to get a number of rays
-  std::vector<cv::Point> predictions;
-  cv::LineIterator prediction_line_iterator(
-    map, 
-    cv::Point(round(ray_endpoint1.x), round(ray_endpoint1.y)),
-    cv::Point(round(ray_endpoint2.x), round(ray_endpoint2.y))
-  );
-
-  cv::LineIterator it = prediction_line_iterator;
-  for (size_t i = 0; i < prediction_line_iterator.count; i++, it++)
-  {
-    int x = it.pos().x;
-    int y = it.pos().y;
-    x = std::max( std::min(x, map.cols-1), 0);
-    y = std::max( std::min(y, map.rows-1), 0);
-    predictions.push_back(
-      cv::Point(x, y)
-    );
-  }
-  
 
   std::vector<cv::Point> obstacles;
   bool is_obstacle = false;
@@ -186,7 +300,7 @@ int LinearMotionModel::updateWayPoint(  cv::Mat &map, float map_resolution,
         obstacles.push_back(it.pos());
         break;
       }
-      // debug_map.at<uint8_t>(it.pos()) = 127;
+      // debug_map.at<uint8_t>(it.pos()) = 100;
     }
   }
   // for debug
@@ -194,17 +308,6 @@ int LinearMotionModel::updateWayPoint(  cv::Mat &map, float map_resolution,
   
   obstacles = expandObstacleVector(map, map_resolution, obstacles);
   
-  // for debug
-  if (obstacles.size() < num_obstacles_old )
-  {
-    ROS_ERROR("obs size: %d", obstacles.size());
-  }
-  // if (obstacles.size() > num_obstacles_old + 10)
-  // {
-  //   ROS_INFO("Obstacle increased by %d", obstacles.size() - num_obstacles_old);
-  // }
-
-
   if (is_obstacle)
   {
     cv::Mat obstacle_image = cv::Mat::zeros(map.rows, map.cols, CV_8UC1);
@@ -237,19 +340,19 @@ int LinearMotionModel::updateWayPoint(  cv::Mat &map, float map_resolution,
 
     // TODO: floodfill before doing the hough transform
     std::vector<cv::Vec2f> lines;
-    cv::HoughLines(obstacle_image, lines, OBSTACLE_INFLATION * 1.7 / map_resolution, CV_PI/180.0*2.0, obstacle_count*0.45, 0, 0);
+    cv::HoughLines(obstacle_image, lines, OBSTACLE_INFLATION * 1.2 / map_resolution, CV_PI/180.0*2.0, obstacle_count*0.45, 0, 0);
 
     // vector<Vec4i> lines;
     // HoughLinesP(obstacle_image, lines, 1, CV_PI/180, 15, 3, 1 );
 
     if (lines.size())
     {
-      for (size_t line_idx = 0; line_idx < lines.size(); line_idx++)
-      {
-        float rho = lines[line_idx][0];
-        float theta = lines[line_idx][1];
-        ROS_INFO("number of lines: %d, line %d, theta:%f rho:%f ",lines.size(), line_idx, theta*180/M_PI, rho);
-      }
+      // for (size_t line_idx = 0; line_idx < lines.size(); line_idx++)
+      // {
+      //   float rho = lines[line_idx][0];
+      //   float theta = lines[line_idx][1];
+      //   ROS_INFO("number of lines: %d, line %d, theta:%f rho:%f ",lines.size(), line_idx, theta*180/M_PI, rho);
+      // }
 
       for (size_t line_idx = 0; line_idx < 1/*lines.size()*/; line_idx++)
       {
@@ -326,6 +429,77 @@ int LinearMotionModel::updateWayPoint(  cv::Mat &map, float map_resolution,
 
 }
 
+bool LinearMotionModel::backoff(
+        cv::Point object_point, 
+        cv::Point obstacle_point, 
+        float backing_off_angle,
+        cv::Mat &map,
+        float map_resolution,
+        cv::Point &object_point_out
+)
+{
+  bool is_obstacle = false;
+  for (size_t obstacle_check_idx = 0; obstacle_check_idx < 3; obstacle_check_idx++)
+  {
+    float clearance = OBSTACLE_CLEARANCE_DISTANCE / map_resolution;
+    float clearance_2 = clearance * 2;
+    object_point_out.x = round(obstacle_point.x + clearance_2 * cos(backing_off_angle));
+    object_point_out.y = round(obstacle_point.y + clearance_2 * sin(backing_off_angle));
+    object_point_out.x = std::max( std::min(object_point_out.x, map.cols-1), 0);
+    object_point_out.y = std::max( std::min(object_point_out.y, map.rows-1), 0);
+
+    cv::LineIterator backing_off_line_iterator(
+      map, 
+      cv::Point(round(obstacle_point.x), round(obstacle_point.y)),
+      cv::Point(round(object_point_out.x), round(object_point_out.y))
+    );
+    cv::LineIterator it = backing_off_line_iterator;
+
+    cv::Point new_obstacle_point;
+    for (size_t i = 0; i < backing_off_line_iterator.count; i++, it++)
+    {
+      if (map.at<uint8_t>(it.pos()) == 255)
+      {
+        is_obstacle = true;
+        new_obstacle_point = it.pos();
+        break;
+      }
+    }
+
+    if (is_obstacle)
+    {
+      float two_obstacle_distance = cv::norm(obstacle_point - new_obstacle_point);
+      if (two_obstacle_distance < (MINIMUM_DISTANCE_BETWEEN_OBSTACLES / map_resolution))
+      {
+        continue;
+      }
+      else
+      {
+        // back-off so that you are right between the obstacles
+        float new_backoff_distance = two_obstacle_distance / 2.0;
+        // don't back off completely, go only half way of the new obstacle
+        // float new_backoff_distance = cv::norm(new_obstacle_point - obstacle_point) / 2.0;
+        object_point_out.x = round(obstacle_point.x + new_backoff_distance * cos(backing_off_angle));
+        object_point_out.y = round(obstacle_point.y + new_backoff_distance * sin(backing_off_angle));
+        object_point_out.x = std::max( std::min(object_point_out.x, map.cols-1), 0);
+        object_point_out.y = std::max( std::min(object_point_out.y, map.rows-1), 0);
+        is_obstacle = false;
+        break;
+      }
+    }
+    else
+    {
+      object_point_out.x = round(obstacle_point.x + clearance * cos(backing_off_angle));
+      object_point_out.y = round(obstacle_point.y + clearance * sin(backing_off_angle));
+      object_point_out.x = std::max( std::min(object_point_out.x, map.cols-1), 0);
+      object_point_out.y = std::max( std::min(object_point_out.y, map.rows-1), 0);
+      break;
+    }
+  }
+
+  return is_obstacle;
+}
+
 int LinearMotionModel::chooseObstacleDirection(
                                                   cv::Point object_point, 
                                                   cv::Point destination_point,
@@ -389,63 +563,15 @@ int LinearMotionModel::chooseObstacleDirection(
   for (size_t angle_idx = 0; angle_idx < 2; angle_idx++)
   {
     float backing_off_angle = backing_off_angles[angle_idx];
-    for (size_t obstacle_check_idx = 0; obstacle_check_idx < 3; obstacle_check_idx++)
-    {
-      float clearance = OBSTACLE_CLEARANCE_DISTANCE / map_resolution;
-      float clearance_2 = clearance * 2;
-      object_point_out.x = round(obstacle_point.x + clearance_2 * cos(backing_off_angle));
-      object_point_out.y = round(obstacle_point.y + clearance_2 * sin(backing_off_angle));
-      object_point_out.x = std::max( std::min(object_point_out.x, map.cols-1), 0);
-      object_point_out.y = std::max( std::min(object_point_out.y, map.rows-1), 0);
-
-      cv::LineIterator backing_off_line_iterator(
-        map, 
-        cv::Point(round(obstacle_point.x), round(obstacle_point.y)),
-        cv::Point(round(object_point_out.x), round(object_point_out.y))
-      );
-      cv::LineIterator it = backing_off_line_iterator;
-
-      cv::Point new_obstacle_point;
-      for (size_t i = 0; i < backing_off_line_iterator.count; i++, it++)
-      {
-        if (map.at<uint8_t>(it.pos()) == 255)
-        {
-          is_obstacle = true;
-          new_obstacle_point = it.pos();
-          break;
-        }
-      }
-
-      if (is_obstacle)
-      {
-        float two_obstacle_distance = cv::norm(obstacle_point - new_obstacle_point);
-        if (two_obstacle_distance < (MINIMUM_DISTANCE_BETWEEN_OBSTACLES / map_resolution))
-        {
-          continue;
-        }
-        else
-        {
-          // back-off so that you are right between the obstacles
-          float new_backoff_distance = two_obstacle_distance / 2.0;
-          // don't back off completely, go only half way of the new obstacle
-          // float new_backoff_distance = cv::norm(new_obstacle_point - obstacle_point) / 2.0;
-          object_point_out.x = round(obstacle_point.x + new_backoff_distance * cos(backing_off_angle));
-          object_point_out.y = round(obstacle_point.y + new_backoff_distance * sin(backing_off_angle));
-          object_point_out.x = std::max( std::min(object_point_out.x, map.cols-1), 0);
-          object_point_out.y = std::max( std::min(object_point_out.y, map.rows-1), 0);
-          is_obstacle = false;
-          break;
-        }
-      }
-      else
-      {
-        object_point_out.x = round(obstacle_point.x + clearance * cos(backing_off_angle));
-        object_point_out.y = round(obstacle_point.y + clearance * sin(backing_off_angle));
-        object_point_out.x = std::max( std::min(object_point_out.x, map.cols-1), 0);
-        object_point_out.y = std::max( std::min(object_point_out.y, map.rows-1), 0);
-        break;
-      }
-    }
+    
+    is_obstacle = backoff(
+      object_point, 
+      obstacle_point, 
+      backing_off_angle,
+      map,
+      map_resolution,
+      object_point_out
+    );
 
     if (!is_obstacle)
     {
@@ -453,7 +579,7 @@ int LinearMotionModel::chooseObstacleDirection(
     }
     else
     {
-      ROS_WARN("original backing off direction infeasible, taking another");
+      ROS_WARN("backing off direction infeasible, taking another");
     }
   }
 
@@ -528,7 +654,8 @@ int LinearMotionModel::chooseObstacleDirection(
   cv::Point2f current_object_destinations_vector[2];
 
   int chosen_idx = -1;
-  bool is_going_back = true;
+  size_t num_going_back=0;
+  std::cout << "Original vector: " << original_object_destination_vector << std::endl;
   for (size_t i = 0; i < 2; i++)
   {
     current_object_destinations_vector[i] = cv::Point2f(
@@ -537,25 +664,28 @@ int LinearMotionModel::chooseObstacleDirection(
     );
     current_object_destinations_vector[i] /= cv::norm(current_object_destinations_vector[i]);
 
-    if (
-          fabs(
-            fabs(
-              acos(original_object_destination_vector.dot(current_object_destinations_vector[i])) 
-            ) - M_PI // 180 degree
-          ) < 10 * M_PI / 180
+    float object_vector_angle = acos(original_object_destination_vector.dot(current_object_destinations_vector[i])) * 180 / M_PI;
+    std::cout << "New vector " << i << ": " << current_object_destinations_vector[i] << std::endl;
+    std::cout << "Current to new angle: " << object_vector_angle << std::endl;
+
+    if  (
+          fabs(object_vector_angle) > 130
         )
     {
       chosen_idx = 1 - i;
+      num_going_back++;
     }
-    else
-    {
-      is_going_back &= false
-    }
-
   }
 
-  if (!is_going_back)
+  if (num_going_back >=2)
   {
+    ROS_ERROR("both the lines are going back, which is impossible!!!");
+    return 1;
+  }
+
+  if (!num_going_back)
+  {
+    // none of the directions are going back, choose among them using the cost function
     float object2destinations_distance[2];
     for (size_t i = 0; i < 2; i++)
     {
@@ -601,7 +731,12 @@ int LinearMotionModel::chooseObstacleDirection(
     object2destinations_distance[1] > object2destinations_distance[0] ? 1 : 0;
 
     float total_cost[2] = {0, 0};
-    float cost_weights[3] = {10, 2, 1};
+    float cost_weights[3] = {
+      10, 
+      0, // 2, 
+      0, // 1
+    };
+
     for (size_t i = 0; i < 2; i++)
     {
       for (size_t j = 0; j < 3; j++)
