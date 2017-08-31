@@ -363,17 +363,19 @@ public:
     
     if (!detectionMsg->detections.size())
     {
+      // give the whole laser readings and hope it will find it
+      pubFilteredLaser_.publish(*laserMsg);
       // nothing found, but still try to track the person later
-      if (fabs(send_time.toSec() - last_update_time_) > person_lost_timeout_)
-      {
-        num_seen_person_under_consideration_ = 0;
-        tracking_status_ = tracking_status_t::LOST;
-        ROS_INFO("PERSON LOST!!");
-      }
-      else
-      {
-        ROS_INFO("Waiting for person to return");
-      }
+      // if (fabs(send_time.toSec() - last_update_time_) > person_lost_timeout_)
+      // {
+      //   num_seen_person_under_consideration_ = 0;
+      //   tracking_status_ = tracking_status_t::LOST;
+      //   ROS_INFO("PERSON LOST!!");
+      // }
+      // else
+      // {
+      //   ROS_INFO("Waiting for person to return");
+      // }
     }
 
     sensor_msgs::LaserScan laserMsgFiltered = *laserMsg;

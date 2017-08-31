@@ -51,7 +51,7 @@ pioneer2dx
       colors [ "red" "blue" "green" "cyan" "yellow" "magenta" ]  
       alwayson 1
       update_interval 1
-      fov 170
+      fov 70
       range 30.0
       image [ 64 64 ]
       pan 0

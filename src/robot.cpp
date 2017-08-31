@@ -24,7 +24,7 @@ Robot::Robot( ros::NodeHandle n,
               std::string map_frame, std::string person_frame, bool use_deadman  )
   : base_frame_(base_frame), odom_frame_(odom_frame), 
     map_frame_(map_frame), person_frame_(person_frame), use_deadman_(use_deadman),
-    image_transport_(n)
+    image_transport_(n),last_human_pose_update(ros::Time::now().toSec())
 {
   cv::Mat Q = cv::Mat::zeros(NUM_STATES, NUM_STATES, CV_32F);
   Q.at<float>(X_T_IDX, X_T_IDX) = X_T_PROCESS_NOISE_VAR;
@@ -370,11 +370,70 @@ cv::Point3f Robot::updatePrediction()
     return prediction_global_prev_;
 }
 
-void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& msg) try
+int Robot::updateHumanPrediction(float dt)
+{ 
+  cv::Mat state = person_kalman_->state();
+  float person_vel = state.at<float>(VEL_IDX, 0);
+  float person_theta = state.at<float>(THETA_IDX, 0);
+
+  if (!std::isfinite(person_vel) || !std::isfinite(person_theta))
+  {
+    return 1;
+  }
+
+  float person_x = absolute_tf_pose_human_.getOrigin().getX();
+  float person_y = absolute_tf_pose_human_.getOrigin().getY();
+
+  float prediction_person_x = person_x + cos(person_theta) * dt * person_vel;
+  float prediction_person_y = person_y + sin(person_theta) * dt * person_vel;
+
+  absolute_tf_pose_human_previous_ = absolute_tf_pose_human_;
+  absolute_tf_pose_human_.setOrigin(
+    tf::Vector3(
+      prediction_person_x,
+      prediction_person_y,
+      0
+    )
+  );
+  last_human_pose_update = ros::Time::now().toSec();
+
+  // publish tf of the predicted human pose for visualization   
+  tf::StampedTransform base_frame_T_map;
+  try
+  {
+    
+    tf_listener_.lookupTransform(base_frame_, map_frame_,
+                                ros::Time(0), base_frame_T_map);
+  }
+  catch (tf::TransformException ex)
+  {
+    ROS_ERROR("TF error %s", ex.what());
+    return 1;
+    // ros::Duration(1.0).sleep();
+  }
+
+  tf::Transform transform_base_frame_human = base_frame_T_map * absolute_tf_pose_human_;
+  tf_broadcaster_.sendTransform(
+    tf::StampedTransform(
+      transform_base_frame_human, ros::Time::now(), 
+      base_frame_, 
+      person_frame_
+    )
+  );
+
+  return 0;
+}
+
+void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& msg) 
 {
   current_odometry_ = *msg;
-  float dt = current_relative_pose_.header.stamp.toSec() - previous_relative_pose_.header.stamp.toSec();
+}
 
+void Robot::spinOnce() try
+{
+  float dt = current_relative_pose_.header.stamp.toSec() - previous_relative_pose_.header.stamp.toSec();
+  bool is_using_predicted_human = false;
+  
   // check if we are still getting blob readings
   if (
         current_relative_pose_.header.stamp.toSec() &&  // is valid
@@ -382,20 +441,51 @@ void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& 
         dt <= 0
       )
   {
+
+    if (!isDeadManActive)
+    {
+      ROS_WARN("Deadman inactive and no blob reading");
+      throw OdometryException();
+    }
+
     if  (
-          !isDeadManActive ||
           ros::Time::now().toSec() - current_relative_pose_.header.stamp.toSec() > blob_measurements_timeout_
         )
-    {  
-        cv::Mat state = person_kalman_->state();
-        ROS_WARN("person speed: %f theta: %f", state.at<float>(VEL_IDX, 0),  state.at<float>(THETA_IDX, 0) * 180 / M_PI );
+    {
+        ROS_WARN("blob measurements timed out, stopping...");  
         throw OdometryException();
     }
     else
     {
       // no new blob measurement, just go to the last destination
-      ROS_WARN("no new blob measurement, just going to the last destination");
-      return;  
+      // if (last_human_pose_update && person_kalman_->isInitialized())
+      // {
+      //   ROS_WARN("no new blob measurement, using last estimated velocity for update");
+        
+      //   dt = ros::Time::now().toSec() - last_human_pose_update;
+      //   if (dt <= 0)
+      //   {
+      //     ROS_ERROR("dt <= 0");
+      //     return;
+      //   }
+      //   if (updateHumanPrediction(dt))
+      //   {
+      //     ROS_WARN("prediction for person failed, returning...");
+      //     return;   
+      //   }
+
+      //   is_using_predicted_human = true;
+
+      //   cv::Mat state = person_kalman_->state();
+      //   ROS_WARN("person speed: %f theta: %f", state.at<float>(VEL_IDX, 0),  state.at<float>(THETA_IDX, 0) * 180 / M_PI );
+      // }
+      // else
+      // {
+      //   ROS_WARN("no new blob measurement and no prediction for person available, returning...");
+      //   return;
+      // }
+      ROS_WARN("no new blob measurement, returning");
+      return;
     }
   }
 
@@ -429,15 +519,15 @@ void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& 
   }
 
   tf::StampedTransform r0_T_map; 
-  // relative pose of human wrt robot (base_link)
-  tf::StampedTransform r0_T_r1;
+  // // relative pose of human wrt robot (base_link)
+  // tf::StampedTransform r0_T_r1;
   try
   {
     
     tf_listener_.lookupTransform(base_frame_, map_frame_,
                                 ros::Time(0), r0_T_map);
-    tf_listener_.lookupTransform(base_frame_, person_frame_,
-                                ros::Time(0), r0_T_r1);
+    // tf_listener_.lookupTransform(base_frame_, person_frame_,
+    //                             ros::Time(0), r0_T_r1);
   }
   catch (tf::TransformException ex)
   {
@@ -446,22 +536,22 @@ void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& 
     // ros::Duration(1.0).sleep();
   }
 
-  human_relative_pose = cv::Point3f(
-    r0_T_r1.getOrigin().getX(), 
-    r0_T_r1.getOrigin().getY(), 
-    r0_T_r1.getOrigin().getZ()
-  );
-  absolute_tf_pose_robot_ = r0_T_map.inverse();
+  // human_relative_pose = cv::Point3f(
+  //   r0_T_r1.getOrigin().getX(), 
+  //   r0_T_r1.getOrigin().getY(), 
+  //   r0_T_r1.getOrigin().getZ()
+  // );
+  // absolute_tf_pose_robot_ = r0_T_map.inverse();
 
   cv::Point3f robot_pose;
   cv::Mat state = person_kalman_->state();
   
   // global pose
-  cv::Point3f human_global_pose = transformPoint(r0_T_map.inverse(), human_relative_pose);
+  // cv::Point3f human_global_pose = transformPoint(r0_T_map.inverse(), human_relative_pose);
   // measurement
   cv::Mat y = cv::Mat(2, 1, CV_32F);
-  y.at<float>(0, 0) = human_global_pose.x;
-  y.at<float>(1, 0) = human_global_pose.y;
+  y.at<float>(0, 0) = absolute_tf_pose_human_.getOrigin().getX(); //human_global_pose.x;
+  y.at<float>(1, 0) = absolute_tf_pose_human_.getOrigin().getY(); //human_global_pose.y;
 
   bool isKalmanValid = true;
   if (!person_kalman_->isInitialized())
@@ -513,15 +603,16 @@ void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& 
     }
   }
   
-
   previous_relative_pose_ = current_relative_pose_;
-  absolute_tf_pose_human_previous_ = absolute_tf_pose_human_;
-  
+  last_human_pose_update = ros::Time::now().toSec();  
+
+    
   if (!isKalmanValid)
   {
+    person_kalman_->reintialize();
     throw OdometryException();
   }
-  
+
   float bearing_angle = atan2(human_relative_pose.y, -human_relative_pose.x);
   float bearing_range = sqrt(
     pow(human_relative_pose.x, 2) +
@@ -589,11 +680,18 @@ void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& 
   float est_v = new_state.at<float>(VEL_IDX, 0);
   float est_theta = new_state.at<float>(THETA_IDX, 0);
 
+
   // float est_x = human_global_pose.x;
   // float est_y = human_global_pose.y;
   // float est_theta = 0;
 
-
+  if (is_using_predicted_human)
+  {
+    std::cout << "Prediction: " << std::endl;
+    std::cout << "Input: " << y << std::endl;
+    std::cout << "Output: " << new_state.rowRange(0, 2) << std::endl;
+    std::cout << "dt: " << dt << std::endl;
+  }
 
   if (!std::isnan(est_x) && !std::isnan(est_y))
   {
@@ -604,6 +702,16 @@ void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& 
         0
       ) 
     );
+
+    // reset the absolute pose based on kalman filter update  
+    absolute_tf_pose_human_.setOrigin(
+      tf::Vector3(
+        est_x,
+        est_y,
+        0
+      )  
+    );
+    absolute_tf_pose_human_previous_ = absolute_tf_pose_human_;
   }
   else
   {
@@ -650,7 +758,7 @@ void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& 
   // tell the robot to go to the predicted position
   if (
     // true 
-    est_v > DISTANCE_EPSILON/10
+    est_v > DISTANCE_EPSILON*dt
     // theta_stddev < ORIENTATION_ERROR_EPSILON
     // velocity_stddev < VELOCITY_ERROR_EPSILON &&
     // target_x_stddev < POSITION_ERROR_EPSILON &&

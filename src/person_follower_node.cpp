@@ -245,8 +245,13 @@ int main(int argc, char** argv )
   ros::Subscriber joy_sub = n.subscribe("/teleop/joy", 1, &Robot::joyCallback, &myRobot);  
   ros::Subscriber groundtruth_sub = n.subscribe("/person_follower/groundtruth_pose", 1, &Robot::myBlobUpdate, &myRobot);
   
-  ros::spin();
-
+  ros::Rate loop_rate(50);
+  while (ros::ok())
+  {
+    ros::spinOnce();
+    loop_rate.sleep();
+    myRobot.spinOnce();
+  }
 
 
 

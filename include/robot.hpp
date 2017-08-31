@@ -40,6 +40,7 @@ private:
     typedef actionlib::SimpleActionClient<move_base_msgs::MoveBaseAction> MoveBaseClient;
 
     int time;
+    double last_human_pose_update;
     ros::Publisher cmd_vel_publisher;
     
     tf::TransformListener listener;
@@ -106,6 +107,7 @@ public:
 
     ~Robot();
     
+    int updateHumanPrediction(float dt);
     void joyCallback(const sensor_msgs::Joy& msg);
     void odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& msg);
     void myBlobUpdate (const boost::shared_ptr<const geometry_msgs::TransformStamped>& msg);
@@ -118,6 +120,8 @@ public:
 
     void publishZeroCmdVel();
     void sendNavGoal();
+
+    void spinOnce();
 
     class OdometryException: public std::exception
     {
