@@ -3,7 +3,7 @@
 	<!-- <arg name="odom_frame" default="robot_0/odom_combined" /> -->
 	<arg name="odom_frame" default="robot_0/odom" />
 	<arg name="map_frame" default="map" />
-	<arg name="use_deadman" default="false" />
+	<arg name="use_deadman" default="true" />
 	<arg name="person_frame" default="person_raw" />
 
 
@@ -76,5 +76,6 @@
 		<remap from="cmd_vel" to="robot_1/cmd_vel" />
 		<param name="scale_linear" value="0.75" />
 		<param name="scale_angular" value="0.5" />
+		<param name="enable_button" value="1" />
 	</node>
 </launch>

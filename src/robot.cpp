@@ -33,10 +33,12 @@ Robot::Robot( ros::NodeHandle n,
   Q.at<float>(Y_T_1_IDX, Y_T_1_IDX) = Y_T_1_PROCESS_NOISE_VAR;
   Q.at<float>(VEL_IDX, VEL_IDX) = VEL_PROCESS_NOISE_VAR;
   Q.at<float>(THETA_IDX, THETA_IDX) = THETA_PROCESS_NOISE_VAR;
+  Q.at<float>(OMEGA_IDX, OMEGA_IDX) = OMEGA_PROCESS_NOISE_VAR;
 
-  cv::Mat R = cv::Mat::zeros(2, 2, CV_32F);
+  cv::Mat R = cv::Mat::zeros(3, 3, CV_32F);
   R.at<float>(0, 0) = X_T_MEASUREMENT_NOISE_VAR;
   R.at<float>(1, 1) = Y_T_MEASUREMENT_NOISE_VAR;
+  R.at<float>(2, 2) = THETA_INIT_ERROR_VAR;
 
   cv::Mat P = cv::Mat::eye(NUM_STATES, NUM_STATES, CV_32F);
   P.at<float>(0, 0) = X_T_INIT_ERROR_VAR;
@@ -45,6 +47,7 @@ Robot::Robot( ros::NodeHandle n,
   P.at<float>(3, 3) = Y_T_1_INIT_ERROR_VAR;
   P.at<float>(4, 4) = VEL_INIT_ERROR_VAR;
   P.at<float>(5, 5) = THETA_INIT_ERROR_VAR;
+  P.at<float>(6, 6) = OMEGA_INIT_ERROR_VAR;
 
   // pub_waypoints_ = nh_.advertise<sensor_msgs::PointCloud>("/person_follower/waypoints", 1);
 
@@ -427,6 +430,7 @@ int Robot::updateHumanPrediction(float dt)
 void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& msg) 
 {
   current_odometry_ = *msg;
+
   spinOnce();
 }
 
@@ -584,6 +588,7 @@ void Robot::spinOnce() try
         initState.at<float>(Y_T_1_IDX, 0) = absolute_tf_pose_human_previous_.getOrigin().getY();
         initState.at<float>(VEL_IDX, 0) = velocity;
         initState.at<float>(THETA_IDX, 0) = theta;
+        initState.at<float>(OMEGA_IDX, 0) = 0;
 
         person_kalman_->init(0, initState);
         ROS_INFO("EKF initialized");
@@ -656,16 +661,20 @@ void Robot::spinOnce() try
   J_robot_y.at<float>(0, 0) = 0;
   J_robot_y.at<float>(1, 0) = 1;
 
-  cv::Mat R = cv::Mat::zeros(2, 2, CV_32F);
-  R = J_range * J_range.t() * BEARING_RANGE_ERROR_VAR +
+  cv::Mat R = cv::Mat::zeros(3, 3, CV_32F);
+  cv::Mat R2x2 = J_range * J_range.t() * BEARING_RANGE_ERROR_VAR +
       J_bearing * J_bearing.t() * BEARING_ANGLE_ERROR_VAR +
       J_robot_orientation * J_robot_orientation.t() * robot_orientation_variance +
       J_robot_x * J_robot_x.t() * robot_x_variance +
       J_robot_y * J_robot_y.t() * robot_y_variance;
+  R2x2.copyTo(R.rowRange(0, 2).colRange(0, 2));
+  R.at<float>(2, 2) = BEARING_ANGLE_ERROR_VAR;;
 
   R.at<float>(0, 0) += 0.01;
   R.at<float>(1, 1) += 0.01;
+  R.at<float>(2, 2) += 0.01;
 
+  std::cout << "R: " << R.size() << std::endl;
   person_kalman_->update(y, dt, R);
   cv::Mat new_state = person_kalman_->state();
 
@@ -686,13 +695,7 @@ void Robot::spinOnce() try
   // float est_y = human_global_pose.y;
   // float est_theta = 0;
 
-  if (is_using_predicted_human)
-  {
-    std::cout << "Prediction: " << std::endl;
-    std::cout << "Input: " << y << std::endl;
-    std::cout << "Output: " << new_state.rowRange(0, 2) << std::endl;
-    std::cout << "dt: " << dt << std::endl;
-  }
+  ROS_ERROR("ANGULAR SPEED: %.2e", new_state.at<float>(OMEGA_IDX, 0));
 
   if (!std::isnan(est_x) && !std::isnan(est_y))
   {
@@ -820,7 +823,7 @@ void Robot::spinOnce() try
 
     if (map_image_.total())
     {
-      prediction_global_ = updatePrediction();
+      // prediction_global_ = updatePrediction();
 
       tf::StampedTransform prediction_updated;
       prediction_updated.child_frame_id_ = "updated_prediction"; // source
@@ -839,7 +842,6 @@ void Robot::spinOnce() try
     // angle of the prediction with respect to the robots x axis
     double prediction_angle = atan2(prediction_local_.y, prediction_local_.x);
     if  (
-          // true
           isDeadManActive && 
           fabs(prediction_angle) < 130. * M_PI / 180.  // don't follow if robot is behind
         )
@@ -849,9 +851,9 @@ void Robot::spinOnce() try
     else // if (!isDeadManActive)
     {
       // cancel anything that's going on
-      ROS_WARN("deadman off or goal behind the robot, reinitializing");
-      person_kalman_->reintialize();
-      prediction_particle_filter_.reintialize();
+      ROS_WARN("deadman off or goal behind the robot, stopping");
+      // person_kalman_->reintialize();
+      // prediction_particle_filter_.reintialize();
       throw OdometryException();
     }
   }

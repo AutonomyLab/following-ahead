@@ -9,7 +9,7 @@ include "sick.inc"
 # time to pause (in GUI mode) or quit (in headless mode (-g)) the simulation
 quit_time 3600 # 1 hour of simulated time
 
-paused 1
+paused 0
 
 resolution 0.02
 
@@ -38,7 +38,7 @@ pioneer2dx
   color "red"
   # can refer to the robot by this name
   name "r0"
-  pose [ -0.842 2.475 0.000 164.876 ] 
+  pose [ -1.938 2.694 0.000 164.876 ] 
 
   # pioneer2dx's sonars will be ranger:0 and the laser will be ranger:1
   sicklaser( pose [ 0.000 0.000 0.000 0.000 ] ) 
@@ -51,7 +51,7 @@ pioneer2dx
       colors [ "red" "blue" "green" "cyan" "yellow" "magenta" ]  
       alwayson 1
       update_interval 1
-      fov 70
+      fov 170
       range 30.0
       image [ 64 64 ]
       pan 0

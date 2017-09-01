@@ -3,7 +3,7 @@
 
 #include <cmath>
 
-#define DISTANCE_EPSILON 0.04
+#define DISTANCE_EPSILON 0.01 // 0.04
 #define VELOCITY_ERROR_EPSILON 1.0
 #define POSITION_ERROR_EPSILON 1.0
 #define ORIENTATION_ERROR_EPSILON 1.5
@@ -24,7 +24,7 @@
 #define avoidduration 10
 #define numberOfPosHist 1
 
-#define NUM_STATES 6
+#define NUM_STATES 7
 
 // if the estimated velocity is lower than this, assume it to be 0
 #define VELOCITY_THRESHOLD 0.01
@@ -42,6 +42,8 @@
 #define BLOB_NOISE_STDDEV_X 0.1
 #define BLOB_NOISE_STDDEV_Y 0.1
 
+#define BLOB_ANGLE_ERROR
+
 #define DEPTH_LIMIT_TRACKING 1
 
 // Kalman filter index:
@@ -51,10 +53,12 @@
 #define Y_T_1_IDX 3
 #define VEL_IDX 4
 #define THETA_IDX 5
+#define OMEGA_IDX 6
 // Infinite impulse response (IIR) filter for velocity and orientation
 // higher these values, more importance to the new readings
 #define VEL_IIR_ALPHA 0.5
-#define THETA_IIR_ALPHA 0.8 // 0.01
+#define THETA_IIR_ALPHA 0.9 // 0.01
+#define OMEGA_IIR_ALPHA 0.5
 
 // process noise during the prediction step of EKF
 #define X_T_PROCESS_NOISE_VAR 0.01
@@ -62,12 +66,14 @@
 #define X_T_1_PROCESS_NOISE_VAR 0.01
 #define Y_T_1_PROCESS_NOISE_VAR 0.01
 #define VEL_PROCESS_NOISE_VAR 0.01
-#define THETA_PROCESS_NOISE_VAR 0.1
+#define THETA_PROCESS_NOISE_VAR 0.01 	
+#define OMEGA_PROCESS_NOISE_VAR 0.1
 
 // measurement noise during the correction step of EKF
 // TODO: they are in meters, change them to be in pixels
 #define X_T_MEASUREMENT_NOISE_VAR 0.1
 #define Y_T_MEASUREMENT_NOISE_VAR 0.1
+#define THETA_MEASUREMENT_NOISE_VAR 0.1
 
 // initial error state covariance
 #define X_T_INIT_ERROR_VAR 0.01
@@ -76,9 +82,10 @@
 #define Y_T_1_INIT_ERROR_VAR 0.01
 #define VEL_INIT_ERROR_VAR 0.1
 #define THETA_INIT_ERROR_VAR 0.1
+#define OMEGA_INIT_ERROR_VAR 0.2
 
 // in rad^2
-#define BEARING_ANGLE_ERROR_VAR 0.45	
+#define BEARING_ANGLE_ERROR_VAR 0.001	
 #define BEARING_RANGE_ERROR_VAR 0.012
 
 
