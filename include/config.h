@@ -3,7 +3,7 @@
 
 #include <cmath>
 
-#define DISTANCE_EPSILON 0.04
+#define DISTANCE_EPSILON 0.08
 #define VELOCITY_ERROR_EPSILON 1.0
 #define POSITION_ERROR_EPSILON 1.0
 #define ORIENTATION_ERROR_EPSILON 1.5
@@ -42,7 +42,7 @@
 #define BLOB_NOISE_STDDEV_X 0.1
 #define BLOB_NOISE_STDDEV_Y 0.1
 
-#define DEPTH_LIMIT_TRACKING 1
+#define DEPTH_LIMIT_TRACKING 1.0
 
 // Kalman filter index:
 #define X_T_IDX 0
@@ -102,7 +102,7 @@
 #define OCCUPANCY_THRESHOLD 70
 #define OBSTACLE_RAYCASTING_PERTURBATION 5
 // distance to maintain from the obstacles (for the motion model)
-#define OBSTACLE_CLEARANCE_DISTANCE 0.6 // 1.5
+#define OBSTACLE_CLEARANCE_DISTANCE 1.0 // 1.5
 // the normalized cost difference below this will count as a draw
 #define NORMALIZED_COST_THRESHOLD 0.04
 // dilation to inflate obstacles in map (in meters)

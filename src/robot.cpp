@@ -62,8 +62,9 @@ Robot::Robot( ros::NodeHandle n,
     ROS_INFO("Waiting for the move_base action server to come up");
   }
 
-  // odom_sub_.subscribe(n, "/husky/odom", 1);
-
+  // tf_odom_filter_ = new tf::MessageFilter<nav_msgs::Odometry>(odom_filtered_sub_, tf_listener_, base_frame_, 10);
+  // tf_odom_filter_->registerCallback( boost::bind(&Robot::odometryCallback, this, _1) );
+  
   odom_topic_subscriber_ = n.subscribe("/husky/odom", 1, &Robot::odometryCallback, this);
   map_image_pub_ = image_transport_.advertise("map_image", 1);
   map_image_pub_temp_ = image_transport_.advertise("map_image_temp", 1);
@@ -126,13 +127,15 @@ void Robot::myBlobUpdate(const boost::shared_ptr<const geometry_msgs::TransformS
   {
     
     tf_listener_.lookupTransform(current_relative_pose_.header.frame_id, map_frame_,
-                                ros::Time(0), r0_T_map);
+                                msg->header.stamp,// ros::Time(0), 
+                                r0_T_map);
     tf_listener_.lookupTransform(base_frame_, map_frame_,
-                                ros::Time(0), base_frame_T_map);
+                                msg->header.stamp,//ros::Time(0), 
+                                base_frame_T_map);
   }
   catch (tf::TransformException ex)
   {
-    ROS_ERROR("TF error %s", ex.what());
+    ROS_ERROR("TF error in blob update %s", ex.what());
     return;
     // ros::Duration(1.0).sleep();
   }
@@ -154,11 +157,12 @@ void Robot::myBlobUpdate(const boost::shared_ptr<const geometry_msgs::TransformS
   ));
   absolute_tf_pose_human_.setRotation(tf::Quaternion(0, 0, 0, 1));
   
-  tf::Transform transform_base_frame_human = base_frame_T_map * absolute_tf_pose_human_;
+  // tf::Transform transform_base_frame_human = base_frame_T_map * absolute_tf_pose_human_;
   tf_broadcaster_.sendTransform(
     tf::StampedTransform(
-      transform_base_frame_human, ros::Time::now(), 
-      base_frame_, 
+      absolute_tf_pose_human_, // transform_base_frame_human, 
+      ros::Time::now(), 
+      map_frame_, // base_frame_, 
       person_frame_
     )
   );
@@ -412,11 +416,12 @@ int Robot::updateHumanPrediction(float dt)
     // ros::Duration(1.0).sleep();
   }
 
-  tf::Transform transform_base_frame_human = base_frame_T_map * absolute_tf_pose_human_;
+  // tf::Transform transform_base_frame_human = base_frame_T_map * absolute_tf_pose_human_;
   tf_broadcaster_.sendTransform(
     tf::StampedTransform(
-      transform_base_frame_human, ros::Time::now(), 
-      base_frame_, 
+      absolute_tf_pose_human_, // transform_base_frame_human, 
+      ros::Time::now(), 
+      map_frame_, // base_frame_, 
       person_frame_
     )
   );
@@ -432,6 +437,11 @@ void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& 
 
 void Robot::spinOnce() try
 {
+  if (current_odometry_.twist.twist.linear.x < 0.1 && current_odometry_.twist.twist.angular.z > 0.15)
+  {
+    ROS_WARN("Pure rotation detection, not doing updates!!");
+    return;
+  }
   float dt = current_relative_pose_.header.stamp.toSec() - previous_relative_pose_.header.stamp.toSec();
   bool is_using_predicted_human = false;
   
@@ -673,7 +683,7 @@ void Robot::spinOnce() try
   // broadcast the estimated person position frame with respect to the global frame
   tf::StampedTransform person_kalman_transform;
   person_kalman_transform.child_frame_id_ = "person_kalman"; // source
-  person_kalman_transform.frame_id_ = "map"; // target
+  person_kalman_transform.frame_id_ = map_frame_; // target
   person_kalman_transform.stamp_ = ros::Time::now();
   
   float est_x = new_state.at<float>(X_T_IDX, 0);

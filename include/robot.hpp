@@ -64,10 +64,13 @@ private:
     tf::TransformListener tf_listener_;
     tf::TransformBroadcaster tf_broadcaster_;
     tf::StampedTransform local_transform_;
-    tf::MessageFilter<nav_msgs::Odometry> * tf_filter_;
-
-    message_filters::Subscriber<nav_msgs::Odometry> odom_sub_;
+    
+    // Either
+    tf::MessageFilter<nav_msgs::Odometry> * tf_odom_filter_;
+    message_filters::Subscriber<nav_msgs::Odometry> odom_filtered_sub_;
+    // Or
     ros::Subscriber odom_topic_subscriber_;
+
     
     MoveBaseClient *move_base_client_ptr_;
 

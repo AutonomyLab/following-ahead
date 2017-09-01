@@ -243,7 +243,16 @@ int main(int argc, char** argv )
   // pubPointCloud =  n.advertise<sensor_msgs::PointCloud>("person_cloud", 1);
   
   ros::Subscriber joy_sub = n.subscribe("/teleop/joy", 1, &Robot::joyCallback, &myRobot);  
-  ros::Subscriber groundtruth_sub = n.subscribe("/person_follower/groundtruth_pose", 1, &Robot::myBlobUpdate, &myRobot);
+  
+  message_filters::Subscriber<geometry_msgs::TransformStamped> groundtruth_sub;
+  groundtruth_sub.subscribe(n, "/person_follower/groundtruth_pose", 10);
+
+  tf::TransformListener tf; 
+  tf::MessageFilter<geometry_msgs::TransformStamped> * tf_filter = new tf::MessageFilter<geometry_msgs::TransformStamped>(groundtruth_sub, tf, base_frame, 10);;
+
+  tf_filter->registerCallback( boost::bind(&Robot::myBlobUpdate, &myRobot, _1) );
+
+  // ros::Subscriber groundtruth_sub = n.subscribe("/person_follower/groundtruth_pose", 1, &Robot::myBlobUpdate, &myRobot);
   
   ros::spin();
   // ros::Rate loop_rate(15);

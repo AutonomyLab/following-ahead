@@ -136,7 +136,7 @@ public:
     
     ros::Time send_time = ros::Time::now();
     int selected_person_idx = -1;
-    float min_leg_dist = 100;
+    float min_leg_dist = 3;
 
     for (int i=0; i<detectionMsg->detections.size(); i++)
     {
@@ -381,7 +381,7 @@ public:
 
     human_prev_pose_ = vectCandidateCenter[selected_person_idx];
     geometry_msgs::TransformStamped transform_stamped;
-    transform_stamped.header.stamp = ros::Time::now();
+    transform_stamped.header.stamp = detectionMsg->header.stamp;
     transform_stamped.header.frame_id = "camera";
     transform_stamped.transform.translation.x = vectCandidateCenter[selected_person_idx].x;
     transform_stamped.transform.translation.y = vectCandidateCenter[selected_person_idx].y;

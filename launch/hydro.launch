@@ -5,7 +5,7 @@
     <group>
         <machine name="hydro" address="hydro" default="true" user="payam" env-loader="~/env_loader.sh" />
 
-        <include file="$(find person_follower)/launch/hokuyo.launch">
+        <include file="$(find person_follower)/launch/hokuyo.launch" output="screen">
         	<arg name="laser_frame" value="$(arg laser_frame)" />
         	<arg name="laser_frame_back" value="$(arg laser_frame_back)" />
         </include>

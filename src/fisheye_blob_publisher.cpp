@@ -3,13 +3,16 @@
 #include <std_msgs/Bool.h>
 #include <std_msgs/String.h>
 #include <sensor_msgs/Image.h>
-#include <message_filters/subscriber.h>
 #include <geometry_msgs/Twist.h>
+
+#include <message_filters/subscriber.h>
 #include <message_filters/time_synchronizer.h>
 #include <message_filters/synchronizer.h>
 #include <message_filters/sync_policies/approximate_time.h>
+#include <message_filters/sync_policies/exact_time.h>
 #include <image_transport/image_transport.h>
 #include <image_transport/subscriber_filter.h>
+
 #include <cv_bridge/cv_bridge.h>
 #include <pcl_ros/point_cloud.h>
 #include <pcl/point_types.h>
@@ -44,6 +47,7 @@ public:
   enum tracking_status_t {
     PERSON_SELECTED,
     PERSON_UNDER_CONSIDERATION,
+    WAITING_TO_RETURN,
     LOST
   };
 
@@ -57,6 +61,12 @@ private:
   // TODO: publisher for seed
   ros::Publisher pubPositionMeasurementSeeds_;
   ros::Publisher pubFilteredLaser_;
+
+  message_filters::Subscriber<people_msgs::PositionMeasurementArray> *people_detection_sub_;
+  message_filters::Subscriber<people_msgs::PositionMeasurementArray> *leg_detection_sub_;
+  typedef message_filters::sync_policies::ExactTime<people_msgs::PositionMeasurementArray, people_msgs::PositionMeasurementArray> PeopleSyncPolicy;
+  // ExactTime takes a queue size as its constructor argument, hence MySyncPolicy(10)
+  message_filters::Synchronizer<PeopleSyncPolicy> *people_sync_policy_;
 
   ros::Subscriber subLegDetections_;
 
@@ -91,11 +101,9 @@ public:
   void computeCameraTF()
   {
     // ----------------------- broadcast camera tf wrt world ---------------------------------
-    camera_tf_.child_frame_id_ = camera_frame_; // source
-    camera_tf_.frame_id_ = camera_parent_frame_; // target
-    camera_tf_.stamp_ = ros::Time::now();
-
-    camera_tf_.setOrigin(tf::Vector3( 
+    // first compute wrt parent frame (laser)
+    tf::Transform parent_T_camera;
+    parent_T_camera.setOrigin(tf::Vector3( 
       camera_wrt_laser_x_, 
       camera_wrt_laser_y_, 
       camera_wrt_laser_z_
@@ -122,8 +130,33 @@ public:
       basis_x.z, basis_y.z, basis_z.z 
     );
     rotation.getRotation(q);
-    camera_tf_.setRotation(q);
+    parent_T_camera.setRotation(q);
 
+    tf::StampedTransform parent_T_map; 
+    try
+    {
+      
+      tf_listener_.lookupTransform(camera_parent_frame_, map_frame_,
+                                  ros::Time(0), parent_T_map);
+    }
+    catch (tf::TransformException ex)
+    {
+      ROS_ERROR("TF error %s", ex.what());
+      return;
+      // ros::Duration(1.0).sleep();
+    }
+
+    camera_tf_.setData(parent_T_map.inverse() * parent_T_camera);
+    camera_tf_.child_frame_id_ = camera_frame_; // source
+    camera_tf_.frame_id_ = map_frame_; // target
+    camera_tf_.stamp_ = ros::Time::now();
+  }
+
+  ~FisheyeBlobPublisher()
+  {
+    delete people_detection_sub_;
+    delete leg_detection_sub_;
+    delete people_sync_policy_;
   }
 
   FisheyeBlobPublisher(ros::NodeHandle n)
@@ -131,7 +164,8 @@ public:
       pointCloudMsg_(new sensor_msgs::PointCloud),
       image_transport_(n),
       tracking_status_(tracking_status_t::LOST),
-      num_seen_person_under_consideration_(0), is_yolo_valid_(false)
+      num_seen_person_under_consideration_(0), is_yolo_valid_(false),
+      last_update_time_(0)
   {
     pubPointCloud_ =  nh_.advertise<sensor_msgs::PointCloud>("person_cloud", 1);
     pubRelativePose_ = nh_.advertise<geometry_msgs::TransformStamped>("/person_follower/groundtruth_pose", 1);
@@ -139,8 +173,16 @@ public:
     pubFilteredLaser_ = nh_.advertise<sensor_msgs::LaserScan>("/scan_filtered", 1);
     pub_undistorted_image_ = image_transport_.advertise("/camera/fisheye/undistorted", 1);
 
-    subLegDetections_ = nh_.subscribe("/people_tracker_measurements", 1000, 
-                                      &FisheyeBlobPublisher::legDetectionCallback, this);
+    ROS_INFO("Creating subs");
+    people_detection_sub_ = new message_filters::Subscriber<people_msgs::PositionMeasurementArray>(nh_, "/people_tracker_measurements", 1);
+    leg_detection_sub_ = new message_filters::Subscriber<people_msgs::PositionMeasurementArray>(nh_, "/leg_tracker_measurements", 1);
+    people_sync_policy_ = new message_filters::Synchronizer<PeopleSyncPolicy>(PeopleSyncPolicy(10), *people_detection_sub_, *leg_detection_sub_);
+    people_sync_policy_->registerCallback(boost::bind(&FisheyeBlobPublisher::legDetectionCallback, this, _1, _2));
+    ROS_INFO("Created subs");
+    
+
+    // subLegDetections_ = nh_.subscribe("/people_tracker_measurements", 1000, 
+    //                                   &FisheyeBlobPublisher::legDetectionCallback, this);
    
     nh_.param("person_lost_timeout", person_lost_timeout_, (double)PERSON_LOST_TIMEOUT);
     nh_.param("camera_wrt_laser_x", camera_wrt_laser_x_, (float)CAM_WRT_LASER_X);
@@ -185,16 +227,54 @@ public:
     undistorted_image.convertTo(undistorted_image_8bit, CV_8UC1);
   }
 
-  void legDetectionCallback(const people_msgs::PositionMeasurementArray::ConstPtr &detectionsMsg)
+  tracking_status_t updateLostStatus(ros::Time send_time)
   {
-    if (!detectionsMsg->people.size())
+    // nothing found, but still try to track the person later
+    if (fabs(send_time.toSec() - last_update_time_) > person_lost_timeout_)
     {
-      return;
+      num_seen_person_under_consideration_ = 0;
+      return tracking_status_t::LOST;
     }
+    else
+    {
+      return tracking_status_t::WAITING_TO_RETURN;
+    }
+  }
 
-    ros::Time send_time = ros::Time::now();
-
+  int findPerson(const people_msgs::PositionMeasurementArray::ConstPtr &detectionsMsg, ros::Time send_time)
+  {
     int selected_person_idx = -1;
+    float min_leg_dist = DEPTH_LIMIT_TRACKING;
+    for (size_t person_idx = 0; person_idx < detectionsMsg->people.size(); person_idx++)
+    {  
+      float leg_dist = sqrt(
+        pow(human_prev_pose_.x - detectionsMsg->people[person_idx].pos.x, 2) +
+        pow(human_prev_pose_.y - detectionsMsg->people[person_idx].pos.y, 2)
+      );
+      std::cout << "checking: ";
+      std::cout << "Checking person at: " << detectionsMsg->people[person_idx].pos.x << ", " 
+                                          << detectionsMsg->people[person_idx].pos.y << ", " 
+                                          << detectionsMsg->people[person_idx].pos.z
+                                          << std::endl; 
+      if  ( 
+             leg_dist < min_leg_dist 
+          )
+      {
+        selected_person_idx = person_idx;
+        min_leg_dist = leg_dist;
+        continue;
+      }
+    }
+    ROS_WARN("selected_person_idx: %d", selected_person_idx);
+    return selected_person_idx;
+  }
+
+  void trackDetections(const people_msgs::PositionMeasurementArray::ConstPtr &detectionsMsg, 
+                      const people_msgs::PositionMeasurementArray::ConstPtr &legDetectionsMsg,
+                      ros::Time send_time,
+                      int &selected_person_idx)
+  {
+    selected_person_idx = -1;
     float min_leg_dist = 3.5;
 
     if  (
@@ -202,136 +282,177 @@ public:
           tracking_status_ == tracking_status_t::PERSON_UNDER_CONSIDERATION
         )
     {
-      min_leg_dist = DEPTH_LIMIT_TRACKING;
-      for (size_t person_idx = 0; person_idx < detectionsMsg->people.size(); person_idx++)
-      {  
-        float leg_dist = sqrt(
-          pow(human_prev_pose_.x - detectionsMsg->people[person_idx].pos.x, 2) +
-          pow(human_prev_pose_.y - detectionsMsg->people[person_idx].pos.y, 2)
-        );
-        if  ( 
-               leg_dist < min_leg_dist 
-            )
-        {
-          if (tracking_status_ == tracking_status_t::PERSON_UNDER_CONSIDERATION)
-          {
-            num_seen_person_under_consideration_++;
-            ROS_INFO("person under consideration %d", num_seen_person_under_consideration_);
-            // TODO: softcode this number
-            if (num_seen_person_under_consideration_ > 4)
-            {
-              tracking_status_ = tracking_status_t::PERSON_SELECTED;
-              ROS_INFO("person selected");
-            }
-          }
-
-          last_update_time_ = send_time.toSec();
-          human_prev_pose_.x =  detectionsMsg->people[person_idx].pos.x;
-          human_prev_pose_.y =  detectionsMsg->people[person_idx].pos.y;
-          human_prev_pose_.z =  detectionsMsg->people[person_idx].pos.z;
-          selected_person_idx = person_idx;
-          min_leg_dist = leg_dist;
-          continue;
-        }
-      }
+      selected_person_idx = findPerson(detectionsMsg, send_time);
     }
     
     if (selected_person_idx == -1)
     {
-        if (!is_yolo_valid_)
-        {
-          ROS_WARN("Yolo is not valid and person lost, going to prev destination");
-          num_seen_person_under_consideration_ = 0;
-          tracking_status_ = tracking_status_t::LOST;
-          return;
-        }
-      // the transformation from map frame to laser frame
-      tf::StampedTransform camera_T_map;
-      try
+      std::cout << "Detections: " << detectionsMsg->people.size() << std::endl;
+      std::cout << "Person not found close to " << human_prev_pose_ << std::endl;
+      if (!is_yolo_valid_)
       {
-        
-        tf_listener_.lookupTransform(camera_frame_, map_frame_,
-                                    ros::Time(0), camera_T_map);
-      }
-      catch (tf::TransformException ex)
-      {
-          ROS_ERROR("TF error %s", ex.what());
-          return;
-      }
-      //find the closest one
-      for (size_t person_idx = 0; person_idx < detectionsMsg->people.size(); person_idx++)
-      { 
-        
-        cv::Point3f map_pos(
-          detectionsMsg->people[person_idx].pos.x,
-          detectionsMsg->people[person_idx].pos.y,
-          detectionsMsg->people[person_idx].pos.z
-        );
-
-        cv::Point3f camera_pos = transformPoint(camera_T_map, map_pos);
-        
-        float leg_dist = sqrt(
-          pow(camera_pos.x, 2) +
-          pow(camera_pos.y, 2) +
-          pow(camera_pos.z, 2) 
-        );
-
-        ROS_INFO("%d leg dist: %f", person_idx, leg_dist);
-
-        if (leg_dist < min_leg_dist)
-        {
-          selected_person_idx = person_idx;
-          min_leg_dist = leg_dist;
-        }
-      }
-
-      if (selected_person_idx != -1)
-      {
-        // we found the closest one
-        tracking_status_ = tracking_status_t::PERSON_UNDER_CONSIDERATION;
+        ROS_WARN("Yolo is not valid and person lost, going to prev destination");
         num_seen_person_under_consideration_ = 0;
-        human_prev_pose_ = cv::Point3f(
-          detectionsMsg->people[selected_person_idx].pos.x,
-          detectionsMsg->people[selected_person_idx].pos.y,
-          detectionsMsg->people[selected_person_idx].pos.z
-        );
-        ROS_INFO("Person is under consideration");
-      } 
-      else
+        tracking_status_ = tracking_status_t::LOST;
+        return;
+      }
+      // check if the lost wait status has timed out
+      tracking_status_ = updateLostStatus(send_time);
+
+      // the transformation from map frame to laser frame
+      if (tracking_status_ == tracking_status_t::LOST)
       {
-        // nothing found, but still try to track the person later
-        if (fabs(send_time.toSec() - last_update_time_) > person_lost_timeout_)
+        //find the closest one
+        tf::StampedTransform camera_T_map;
+        try
         {
+          
+          tf_listener_.lookupTransform(camera_frame_, map_frame_,
+                                      ros::Time(0), camera_T_map);
+        }
+        catch (tf::TransformException ex)
+        {
+            ROS_ERROR("TF error %s", ex.what());
+            return;
+        }
+
+        for (size_t person_idx = 0; person_idx < detectionsMsg->people.size(); person_idx++)
+        { 
+          
+          cv::Point3f map_pos(
+            detectionsMsg->people[person_idx].pos.x,
+            detectionsMsg->people[person_idx].pos.y,
+            detectionsMsg->people[person_idx].pos.z
+          );
+
+          cv::Point3f camera_pos = transformPoint(camera_T_map, map_pos);
+          
+          float leg_dist = sqrt(
+            pow(camera_pos.x, 2) +
+            pow(camera_pos.y, 2) +
+            pow(camera_pos.z, 2) 
+          );
+
+          ROS_INFO("%d leg dist: %f", person_idx, leg_dist);
+
+          if (leg_dist < min_leg_dist)
+          {
+            selected_person_idx = person_idx;
+            min_leg_dist = leg_dist;
+          }
+        }
+
+        if (selected_person_idx != -1)
+        {
+          // we found the closest one
+          tracking_status_ = tracking_status_t::PERSON_UNDER_CONSIDERATION;
           num_seen_person_under_consideration_ = 0;
-          tracking_status_ = tracking_status_t::LOST;
-          ROS_INFO("PERSON LOST!!");
+          human_prev_pose_ = cv::Point3f(
+            detectionsMsg->people[selected_person_idx].pos.x,
+            detectionsMsg->people[selected_person_idx].pos.y,
+            detectionsMsg->people[selected_person_idx].pos.z
+          );
+          ROS_INFO("Person is under consideration");
+          std::cout << "AT: " << human_prev_pose_ << std::endl;
+        } 
+      }
+      else if (tracking_status_ != tracking_status_t::PERSON_UNDER_CONSIDERATION)
+      {
+        // find if we get anything from the legs
+        ROS_WARN("lost person searching for legs: ");
+        int leg_selected_person_idx = findPerson(legDetectionsMsg, send_time);
+        if (leg_selected_person_idx != -1)
+        {
+          human_prev_pose_ = cv::Point3f(
+            legDetectionsMsg->people[leg_selected_person_idx].pos.x,
+            legDetectionsMsg->people[leg_selected_person_idx].pos.y,
+            legDetectionsMsg->people[leg_selected_person_idx].pos.z
+          );
+          tracking_status_ = tracking_status_t::PERSON_SELECTED;
+          last_update_time_ = send_time.toSec();
+          num_seen_person_under_consideration_ = 0;
+        }
+      }
+    }
+    else
+    {
+      if (tracking_status_ == tracking_status_t::PERSON_UNDER_CONSIDERATION)
+      {
+        num_seen_person_under_consideration_++;
+        ROS_INFO("person under consideration %d", num_seen_person_under_consideration_);
+        // TODO: softcode this number
+        if (num_seen_person_under_consideration_ > 4)
+        {
+          tracking_status_ = tracking_status_t::PERSON_SELECTED;
+          ROS_INFO("person selected");
         }
         else
         {
-          ROS_INFO("Waiting for person to return");
+          tracking_status_ = tracking_status_t::PERSON_UNDER_CONSIDERATION;
         }
       }
+
+      last_update_time_ = send_time.toSec();
+      human_prev_pose_.x =  detectionsMsg->people[person_idx].pos.x;
+      human_prev_pose_.y =  detectionsMsg->people[person_idx].pos.y;
+      human_prev_pose_.z =  detectionsMsg->people[person_idx].pos.z;
+      selected_person_idx = person_idx;
+      min_leg_dist = leg_dist;
+
+
+      last_update_time_ = send_time.toSec();
+      human_prev_pose_.x =  detectionsMsg->people[selected_person_idx].pos.x;
+      human_prev_pose_.y =  detectionsMsg->people[selected_person_idx].pos.y;
+      human_prev_pose_.z =  detectionsMsg->people[selected_person_idx].pos.z;
+      std::cout << "Person found: ";
+      std::cout << "Person found at: "  << detectionsMsg->people[selected_person_idx].pos.x << ", " 
+                                        << detectionsMsg->people[selected_person_idx].pos.y << ", " 
+                                        << detectionsMsg->people[selected_person_idx].pos.z
+                                        << std::endl; 
+    }
+  }
+
+  void legDetectionCallback(const people_msgs::PositionMeasurementArray::ConstPtr &peopleDetectionsMsg,
+                            const people_msgs::PositionMeasurementArray::ConstPtr &legDetectionsMsg)
+  {
+    ROS_INFO("in legDetection callback");
+    // TODO: the send time should the timestamp of the detections
+    ros::Time send_time = ros::Time::now();
+
+    if  (
+          !peopleDetectionsMsg || !legDetectionsMsg
+          || (!peopleDetectionsMsg->people.size() && !legDetectionsMsg->people.size())
+        )
+    {
+      tracking_status_ = updateLostStatus(send_time);
+      return;
     }
 
-
-    if (tracking_status_ != tracking_status_t::PERSON_SELECTED || selected_person_idx==-1)
+    tracking_status_t tracking_status_old = tracking_status_;
+    cv::Point3f human_prev_pose_old = human_prev_pose_;
+    size_t num_seen_person_under_consideration_old = num_seen_person_under_consideration_;
+    int selected_person_idx;
+    
+    if (peopleDetectionsMsg->people.size())
+    {
+      trackDetections(peopleDetectionsMsg, legDetectionsMsg, send_time, selected_person_idx);
+    }
+    else
+    {
+      tracking_status_ = updateLostStatus(send_time);
+    }
+    
+    if (tracking_status_ != tracking_status_t::PERSON_SELECTED)
     {
       return;
     }
-    
-
-    human_prev_pose_ = cv::Point3f(
-      detectionsMsg->people[selected_person_idx].pos.x,
-      detectionsMsg->people[selected_person_idx].pos.y,
-      detectionsMsg->people[selected_person_idx].pos.z
-    );
 
     geometry_msgs::TransformStamped transform_stamped;
     transform_stamped.header.stamp = send_time;
-    transform_stamped.header.frame_id = detectionsMsg->people[selected_person_idx].header.frame_id;
-    transform_stamped.transform.translation.x = detectionsMsg->people[selected_person_idx].pos.x;
-    transform_stamped.transform.translation.y = detectionsMsg->people[selected_person_idx].pos.y;
-    transform_stamped.transform.translation.z = detectionsMsg->people[selected_person_idx].pos.z;
+    transform_stamped.header.frame_id = map_frame_;
+    transform_stamped.transform.translation.x = human_prev_pose_.x;
+    transform_stamped.transform.translation.y = human_prev_pose_.y;
+    transform_stamped.transform.translation.z = human_prev_pose_.z;
 
     transform_stamped.transform.rotation.x = 0;
     transform_stamped.transform.rotation.y = 0;
@@ -342,7 +463,7 @@ public:
 
     tf::StampedTransform relative_tf;
     relative_tf.child_frame_id_ = "relative_pose"; // source
-    relative_tf.frame_id_ = detectionsMsg->people[selected_person_idx].header.frame_id; // target
+    relative_tf.frame_id_ = map_frame_; // target
     relative_tf.stamp_ = transform_stamped.header.stamp;
 
     relative_tf.setOrigin(tf::Vector3( 
@@ -354,17 +475,39 @@ public:
     relative_tf.setRotation(tf::Quaternion(0, 0, 0, 1));
 
     tf_broadcaster_.sendTransform(relative_tf);
+  }
 
+  void setYoloInvalid(const sensor_msgs::LaserScan::ConstPtr &laserMsg, ros::Time send_time)
+  {
+    if (laserMsg)
+    {
+      pubFilteredLaser_.publish(*laserMsg);
+    }
+
+    people_msgs::PositionMeasurement measurement_seed;
+    measurement_seed.header.stamp = send_time;
+    measurement_seed.header.frame_id = map_frame_;
+    measurement_seed.name = "person";
+    measurement_seed.object_id = "0";
+    measurement_seed.pos.x = human_prev_pose_.x;
+    measurement_seed.pos.x = human_prev_pose_.y;
+    measurement_seed.pos.x = human_prev_pose_.z; 
+    pubPositionMeasurementSeeds_.publish(measurement_seed);
+    
+    is_yolo_valid_ = false;
   }
 
   void yoloDetectionCallback(const yolo2::ImageDetections::ConstPtr &detectionMsg, const sensor_msgs::LaserScan::ConstPtr &laserMsg, const sensor_msgs::Image::ConstPtr &imageMsg)
   {
+    ROS_INFO("in yolo callback");
+    ros::Time send_time = ros::Time::now();
+    
     if (detectionMsg == NULL || laserMsg == NULL || imageMsg == NULL)
     {
+      setYoloInvalid(laserMsg, send_time);
       return;
     }
 
-    ros::Time send_time = ros::Time::now();
     
     camera_tf_.stamp_ = send_time;
     tf_broadcaster_.sendTransform(camera_tf_);
@@ -372,18 +515,7 @@ public:
     if (!detectionMsg->detections.size())
     {
       // give the whole laser readings and hope it will find it
-      pubFilteredLaser_.publish(*laserMsg);
-
-      people_msgs::PositionMeasurement measurement_seed;
-      measurement_seed.header.stamp = send_time;
-      measurement_seed.header.frame_id = map_frame_;
-      measurement_seed.name = "person";
-      measurement_seed.object_id = "0";
-      measurement_seed.pos.x = human_prev_pose_.x;
-      measurement_seed.pos.x = human_prev_pose_.y;
-      measurement_seed.pos.x = human_prev_pose_.z; 
-      pubPositionMeasurementSeeds_.publish(measurement_seed);
-      is_yolo_valid_ = false;
+      setYoloInvalid(laserMsg, send_time);
       return;
       // nothing found, but still try to track the person later
       // if (fabs(send_time.toSec() - last_update_time_) > person_lost_timeout_)
