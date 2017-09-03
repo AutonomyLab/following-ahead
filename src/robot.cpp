@@ -24,7 +24,8 @@ Robot::Robot( ros::NodeHandle n,
               std::string map_frame, std::string person_frame, bool use_deadman  )
   : base_frame_(base_frame), odom_frame_(odom_frame), 
     map_frame_(map_frame), person_frame_(person_frame), use_deadman_(use_deadman),
-    image_transport_(n),last_human_pose_update(ros::Time::now().toSec())
+    image_transport_(n), last_human_pose_update(ros::Time::now().toSec()),
+    invalid_cmd_vel_count_(0)
 {
   cv::Mat Q = cv::Mat::zeros(NUM_STATES, NUM_STATES, CV_32F);
   Q.at<float>(X_T_IDX, X_T_IDX) = X_T_PROCESS_NOISE_VAR;
@@ -66,6 +67,7 @@ Robot::Robot( ros::NodeHandle n,
   // tf_odom_filter_->registerCallback( boost::bind(&Robot::odometryCallback, this, _1) );
   
   odom_topic_subscriber_ = n.subscribe("/husky/odom", 1, &Robot::odometryCallback, this);
+  cmd_vel_subscriber_ = n.subscribe("/cmd_vel", 1, &Robot::cmdVelSubscriber, this);
   map_image_pub_ = image_transport_.advertise("map_image", 1);
   map_image_pub_temp_ = image_transport_.advertise("map_image_temp", 1);
 
@@ -97,6 +99,11 @@ Robot::~Robot()
   delete move_base_client_ptr_;
 }
 
+void Robot::cmdVelSubscriber(geometry_msgs::Twist cmd_vel_msg)
+{
+  last_cmd_vel_ = cmd_vel_msg;
+}
+
 void Robot::publishZeroCmdVel()
 {
   geometry_msgs::Twist cmd_vel;
@@ -122,16 +129,12 @@ void Robot::myBlobUpdate(const boost::shared_ptr<const geometry_msgs::TransformS
 
   // r0 is the camera frame for real robot and base_link for simulation
   tf::StampedTransform r0_T_map; 
-  tf::StampedTransform base_frame_T_map;
   try
   {
     
     tf_listener_.lookupTransform(current_relative_pose_.header.frame_id, map_frame_,
                                 msg->header.stamp,// ros::Time(0), 
                                 r0_T_map);
-    tf_listener_.lookupTransform(base_frame_, map_frame_,
-                                msg->header.stamp,//ros::Time(0), 
-                                base_frame_T_map);
   }
   catch (tf::TransformException ex)
   {
@@ -157,7 +160,6 @@ void Robot::myBlobUpdate(const boost::shared_ptr<const geometry_msgs::TransformS
   ));
   absolute_tf_pose_human_.setRotation(tf::Quaternion(0, 0, 0, 1));
   
-  // tf::Transform transform_base_frame_human = base_frame_T_map * absolute_tf_pose_human_;
   tf_broadcaster_.sendTransform(
     tf::StampedTransform(
       absolute_tf_pose_human_, // transform_base_frame_human, 
@@ -241,17 +243,28 @@ void Robot::mapCallback(nav_msgs::OccupancyGrid &map_msg)
   map_image_pub_temp_.publish(cv_ptr.toImageMsg());
 
   int dilation_size = round((double)OBSTACLE_INFLATION  / map_msg.info.resolution);
+  
+  cv::Mat erosion_element = cv::getStructuringElement( 
+    cv::MORPH_RECT,
+    cv::Size(dilation_size * 0.1, dilation_size * 0.1)
+  );
+
   cv::Mat dilation_element = cv::getStructuringElement( 
     cv::MORPH_RECT,
     cv::Size(dilation_size, dilation_size)
   );
+
+  erode(map_image_, map_image_temp, erosion_element);
+  map_image_ = map_image_temp;
+
   dilate(map_image_, map_image_temp, dilation_element);
 
-  cv::Mat erosion_element = cv::getStructuringElement( 
+  erosion_element = cv::getStructuringElement( 
     cv::MORPH_RECT,
-    cv::Size(dilation_size * 0.5, dilation_size * 0.5)
+    cv::Size(dilation_size * 0.7, dilation_size * 0.7)
   );
-  erode(map_image_temp, map_image_, dilation_element);
+
+  erode(map_image_temp, map_image_, erosion_element);
   
 
 }
@@ -285,51 +298,51 @@ cv::Point3f Robot::updatePrediction()
 
   cv::Mat debug_map = map_image_.clone();
   
-  bool is_robot_to_prediction_feasible = true;
-  cv::LineIterator it = robot_prediction_line_iterator;
-  for (size_t i = 0; i < robot_prediction_line_iterator.count; i++, it++)
-  {
-    if (map_image_.at<uint8_t>(it.pos()) == 255)
-    {
-      is_robot_to_prediction_feasible = false;
-      break;
-    }
-  }
+  // bool is_robot_to_prediction_feasible = true;
+  // cv::LineIterator it = robot_prediction_line_iterator;
+  // for (size_t i = 0; i < robot_prediction_line_iterator.count; i++, it++)
+  // {
+  //   if (map_image_.at<uint8_t>(it.pos()) == 255)
+  //   {
+  //     is_robot_to_prediction_feasible = false;
+  //     break;
+  //   }
+  // }
 
-  if (is_robot_to_prediction_feasible)
-  {
-    // also check if it is very close to obstacles
-    cv::Point new_prediction_image_coordinates;
-    is_robot_to_prediction_feasible = LinearMotionModel::checkObjectDestinationFeasibility(
-      person_image_coordinates, 
-      prediction_image_coordinates, 
-      map_image_, map_occupancy_grid_.info.resolution,
-      new_prediction_image_coordinates,
-      debug_map
-    );
+  // if (is_robot_to_prediction_feasible)
+  // {
+  //   // also check if it is very close to obstacles
+  //   cv::Point new_prediction_image_coordinates;
+  //   is_robot_to_prediction_feasible = LinearMotionModel::checkObjectDestinationFeasibility(
+  //     person_image_coordinates, 
+  //     prediction_image_coordinates, 
+  //     map_image_, map_occupancy_grid_.info.resolution,
+  //     new_prediction_image_coordinates,
+  //     debug_map
+  //   );
 
-    if (is_robot_to_prediction_feasible)
-    {
-      // don't update the prediction
-      prediction_global_prev_ = prediction_global_;
-      cv::circle(debug_map, person_image_coordinates, 8, 255);
-      cv::circle(debug_map, prediction_image_coordinates, 5, 255);
-    }
-    else
-    {
-      ROS_WARN("Destination close to obstacle, running the linear motion model on it");
-      std::cout << "prediction_image_coordinates: " << prediction_image_coordinates << std::endl;
-      // increasing the length
-      prediction_image_coordinates = new_prediction_image_coordinates;
-      std::cout << "new_prediction_image_coordinates: " << prediction_image_coordinates << std::endl;
+  //   if (is_robot_to_prediction_feasible)
+  //   {
+  //     // don't update the prediction
+  //     prediction_global_prev_ = prediction_global_;
+  //     cv::circle(debug_map, person_image_coordinates, 8, 255);
+  //     cv::circle(debug_map, prediction_image_coordinates, 5, 255);
+  //   }
+  //   else
+  //   {
+  //     ROS_WARN("Destination close to obstacle, running the linear motion model on it");
+  //     std::cout << "prediction_image_coordinates: " << prediction_image_coordinates << std::endl;
+  //     // increasing the length
+  //     prediction_image_coordinates = new_prediction_image_coordinates;
+  //     std::cout << "new_prediction_image_coordinates: " << prediction_image_coordinates << std::endl;
       
-      cv::circle(debug_map, new_prediction_image_coordinates, 15, 255);
-      is_robot_to_prediction_feasible = false;
+  //     cv::circle(debug_map, new_prediction_image_coordinates, 15, 255);
+  //     is_robot_to_prediction_feasible = false;
     
-    }
-  }
+  //   }
+  // }
   
-  if (!is_robot_to_prediction_feasible)
+  // if (!is_robot_to_prediction_feasible)
   {
     
     cv::Point new_person_image_coordinates, new_prediction_image_coordinates;
@@ -432,14 +445,33 @@ int Robot::updateHumanPrediction(float dt)
 void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& msg) 
 {
   current_odometry_ = *msg;
-  spinOnce();
+
+  if (fabs(last_cmd_vel_.angular.z) > 0.55)
+  {
+    ROS_ERROR("Sharp rotation detection, not doing updates!!");
+    invalid_cmd_vel_count_ = 5;
+    return;
+  }
+  else
+  {
+    if (invalid_cmd_vel_count_ == 0)
+    {
+      spinOnce();
+    }
+    else
+    {
+      ROS_ERROR("Waiting for velocity to stabilize");
+      invalid_cmd_vel_count_--;
+    }
+  }
+  
 }
 
 void Robot::spinOnce() try
 {
-  if (current_odometry_.twist.twist.linear.x < 0.1 && current_odometry_.twist.twist.angular.z > 0.15)
+  if (fabs(current_odometry_.twist.twist.angular.z) > 0.55)
   {
-    ROS_WARN("Pure rotation detection, not doing updates!!");
+    ROS_ERROR("Sharp rotation detection, not doing updates!!");
     return;
   }
   float dt = current_relative_pose_.header.stamp.toSec() - previous_relative_pose_.header.stamp.toSec();
@@ -641,7 +673,7 @@ void Robot::spinOnce() try
   float sin_robot_orientation = sin(robot_orientation);
 
   // variances
-  float robot_orientation_variance = fabs(ROBOT_ORIENTATION_VARIANCE_SCALING * current_odometry_.twist.twist.angular.z);
+  float robot_orientation_variance = 0.1; // fabs(ROBOT_ORIENTATION_VARIANCE_SCALING * current_odometry_.twist.twist.angular.z);
   float robot_x_variance = fabs(ROBOT_VELOCITY_VARIANCE_SCALING * cos_robot_orientation * current_odometry_.twist.twist.linear.x);
   float robot_y_variance = fabs(ROBOT_VELOCITY_VARIANCE_SCALING * sin_robot_orientation * current_odometry_.twist.twist.linear.x);
 

@@ -3,7 +3,7 @@
 	<arg name="odom_frame" default="odom" />
 	<arg name="map_frame" default="map" />
 	<arg name="person_frame" default="person_raw" />
-	<arg name="use_deadman" default="true" />
+	<arg name="use_deadman" default="false" />
 	<arg name="laser_frame" default="laser" />
 
 	<param name="/use_sim_time" value="false"/>

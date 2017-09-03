@@ -57,20 +57,24 @@ private:
     PID pid_turn;
     PID pid_cruse;
     bool isDeadManActive;
-
+    
     PredictionParticleFilter prediction_particle_filter_;
     PersonKalman *person_kalman_;
     
     tf::TransformListener tf_listener_;
     tf::TransformBroadcaster tf_broadcaster_;
     tf::StampedTransform local_transform_;
-    
+    tf::StampedTransform r0_T_map_prev; 
+
     // Either
     tf::MessageFilter<nav_msgs::Odometry> * tf_odom_filter_;
     message_filters::Subscriber<nav_msgs::Odometry> odom_filtered_sub_;
     // Or
     ros::Subscriber odom_topic_subscriber_;
 
+    ros::Subscriber cmd_vel_subscriber_;
+    geometry_msgs::Twist last_cmd_vel_;
+    size_t invalid_cmd_vel_count_;
     
     MoveBaseClient *move_base_client_ptr_;
 
@@ -123,6 +127,8 @@ public:
 
     void publishZeroCmdVel();
     void sendNavGoal();
+
+    void cmdVelSubscriber(geometry_msgs::Twist cmd_vel_msg);
 
     void spinOnce();
 

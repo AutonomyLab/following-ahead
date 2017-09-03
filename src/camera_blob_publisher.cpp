@@ -37,6 +37,7 @@ public:
   enum tracking_status_t {
     PERSON_SELECTED,
     PERSON_UNDER_CONSIDERATION,
+    WAITING_TO_RETURN,
     LOST
   };
 
@@ -107,6 +108,20 @@ public:
     return cv::Point3f(person_x, person_y, person_z);
   }
 
+  tracking_status_t updateLostStatus(ros::Time send_time)
+  {
+    // nothing found, but still try to track the person later
+    if (fabs(send_time.toSec() - last_update_time_) > person_lost_timeout_)
+    {
+      num_seen_person_under_consideration_ = 0;
+      return tracking_status_t::LOST;
+    }
+    else
+    {
+      return tracking_status_t::WAITING_TO_RETURN;
+    }
+  }
+
   void detectionCallback(const yolo2::ImageDetections::ConstPtr &detectionMsg, const sensor_msgs::Image::ConstPtr &depthMsg)
   {
 
@@ -136,7 +151,7 @@ public:
     
     ros::Time send_time = ros::Time::now();
     int selected_person_idx = -1;
-    float min_leg_dist = 3;
+    float min_leg_dist = 2.5;
 
     for (int i=0; i<detectionMsg->detections.size(); i++)
     {
@@ -272,43 +287,37 @@ public:
 
     if (selected_person_idx == -1)
     {
-      //find the closest one
-      for (size_t person_idx = 0; person_idx < detectionMsg->detections.size(); person_idx++)
-      { 
-        float leg_dist = cv::norm(vectCandidateCenter[person_idx]);
-        
-        if (leg_dist <= 0)
-        {
-          continue;
+      tracking_status_ = updateLostStatus(send_time);
+      if (tracking_status_ == tracking_status_t::LOST)
+      {
+        //find the closest one
+        for (size_t person_idx = 0; person_idx < detectionMsg->detections.size(); person_idx++)
+        { 
+          float leg_dist = cv::norm(vectCandidateCenter[person_idx]);
+          
+          if (leg_dist <= 0)
+          {
+            continue;
+          }
+
+          if (leg_dist < min_leg_dist)
+          {
+            selected_person_idx = person_idx;
+            min_leg_dist = leg_dist;
+          }
         }
 
-        if (leg_dist < min_leg_dist)
+        if (selected_person_idx != -1)
         {
-          selected_person_idx = person_idx;
-          min_leg_dist = leg_dist;
-        }
-      }
-
-      if (selected_person_idx != -1)
-      {
-        // we found the closest one
-        tracking_status_ = tracking_status_t::PERSON_UNDER_CONSIDERATION;
-        num_seen_person_under_consideration_ = 0;
-        human_prev_pose_ = vectCandidateCenter[selected_person_idx];
-        ROS_INFO("Person is under consideration");
-      } 
-      else
-      {
-        // nothing found, but still try to track the person later
-        if (fabs(send_time.toSec() - last_update_time_) > person_lost_timeout_)
-        {
+          // we found the closest one
+          tracking_status_ = tracking_status_t::PERSON_UNDER_CONSIDERATION;
           num_seen_person_under_consideration_ = 0;
-          tracking_status_ = tracking_status_t::LOST;
-          ROS_INFO("PERSON LOST!!");
-        }
+          human_prev_pose_ = vectCandidateCenter[selected_person_idx];
+          ROS_INFO("Person is under consideration");
+        } 
         else
         {
-          ROS_INFO("Waiting for person to return");
+          tracking_status_ = updateLostStatus(send_time);
         }
       }
     }

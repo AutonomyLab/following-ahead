@@ -103,9 +103,9 @@ int LinearMotionModel::updatePrediction(  cv::Mat &map, float map_resolution,
   int avoid_infinit_loop_counter = 0;
   while (remaining_distance > 0 && loop_count < WAYPOINT_LOOP_LIMIT)
   {
-    ROS_INFO("Prediction iter: %d", loop_count++);
+    // ROS_INFO("Prediction iter: %d", loop_count++);
 
-    std::cout << "destination_point: " << destination_point << std::endl;
+    // std::cout << "destination_point: " << destination_point << std::endl;
     if  (
           updateWayPoint(   
             map, map_resolution,
@@ -119,7 +119,7 @@ int LinearMotionModel::updatePrediction(  cv::Mat &map, float map_resolution,
       status = 1;
       break;
     }
-    ROS_INFO("update prediction distance:%f", new_distance);
+    // ROS_INFO("update prediction distance:%f", new_distance);
 
     if (object_point == destination_point)
     {
@@ -146,12 +146,12 @@ int LinearMotionModel::updatePrediction(  cv::Mat &map, float map_resolution,
 
       if (!is_destination_feasible)
       {
-        std::cout << "destination_point: " << destination_point << std::endl;
-        std::cout << "new_destination_point: " << new_destination_point << std::endl;
+        // std::cout << "destination_point: " << destination_point << std::endl;
+        // std::cout << "new_destination_point: " << new_destination_point << std::endl;
       
         remaining_distance += cv::norm(new_destination_point - destination_point) * map_resolution;
         destination_point = new_destination_point;
-        std::cout << "Infeasible destination, applying motion model again, distance increased by: " << remaining_distance << std::endl;
+        // std::cout << "Infeasible destination, applying motion model again, distance increased by: " << remaining_distance << std::endl;
         
       }
     }
@@ -630,10 +630,10 @@ int LinearMotionModel::chooseObstacleDirection(
 
   float remaining_distance_pixels = remaining_distance_out / map_resolution;
   
-  ROS_INFO(
-    "covered_distance_pixels: %f, covered_distance_meters: %f, remaining_distance_out: %f, remaining_distance_pixels",
-    covered_distance_pixels, covered_distance_meters, remaining_distance_out, remaining_distance_pixels
-  );
+  // ROS_INFO(
+  //   "covered_distance_pixels: %f, covered_distance_meters: %f, remaining_distance_out: %f, remaining_distance_pixels",
+  //   covered_distance_pixels, covered_distance_meters, remaining_distance_out, remaining_distance_pixels
+  // );
 
   cv::Point destination_points[2];
 
@@ -677,7 +677,7 @@ int LinearMotionModel::chooseObstacleDirection(
     }
   }
 
-  if (num_going_back >=2)
+  if (num_going_back >= 2)
   {
     ROS_ERROR("both the lines are going back, which is impossible!!!");
     return 1;
@@ -749,29 +749,29 @@ int LinearMotionModel::chooseObstacleDirection(
       }
     }
 
-    ROS_INFO(
-      "Wall1: %f, Opposite wall: %f",
-      ol_theta[0] * 180 / M_PI,
-      ol_theta[1] * 180 / M_PI
-    );
-    ROS_INFO("Winners: %d, %d, %d", cost_winners[0], cost_winners[1], cost_winners[2]);
-    ROS_INFO(
-      "Cost[0]: %f, %f, %f, Cost[1]: %f, %f, %f", 
-      costs[0][0], costs[0][1], costs[0][2],
-      costs[1][0], costs[1][1], costs[1][2]
-    );
+    // ROS_INFO(
+    //   "Wall1: %f, Opposite wall: %f",
+    //   ol_theta[0] * 180 / M_PI,
+    //   ol_theta[1] * 180 / M_PI
+    // );
+    // ROS_INFO("Winners: %d, %d, %d", cost_winners[0], cost_winners[1], cost_winners[2]);
+    // ROS_INFO(
+    //   "Cost[0]: %f, %f, %f, Cost[1]: %f, %f, %f", 
+    //   costs[0][0], costs[0][1], costs[0][2],
+    //   costs[1][0], costs[1][1], costs[1][2]
+    // );
 
     // TODO: filter out any prediction that is going towards the object
     chosen_idx = (total_cost[1] < total_cost[0]) ? 1 : 0;
   }
   destination_point_out = destination_points[chosen_idx];
 
-  ROS_INFO(
-    "Robot: %f, Chosen wall: %f, Opposite wall: %f",
-    RP_theta * 180 / M_PI,
-    ol_theta[chosen_idx] * 180 / M_PI,
-    ol_theta[1-chosen_idx] * 180 / M_PI
-  );
+  // ROS_INFO(
+  //   "Robot: %f, Chosen wall: %f, Opposite wall: %f",
+  //   RP_theta * 180 / M_PI,
+  //   ol_theta[chosen_idx] * 180 / M_PI,
+  //   ol_theta[1-chosen_idx] * 180 / M_PI
+  // );
 
   return 0;
 }

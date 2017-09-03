@@ -53,16 +53,16 @@
 #define THETA_IDX 5
 // Infinite impulse response (IIR) filter for velocity and orientation
 // higher these values, more importance to the new readings
-#define VEL_IIR_ALPHA 0.5
-#define THETA_IIR_ALPHA 0.8 // 0.01
+#define VEL_IIR_ALPHA 0.3
+#define THETA_IIR_ALPHA 0.7 // 0.01
 
 // process noise during the prediction step of EKF
 #define X_T_PROCESS_NOISE_VAR 0.01
 #define Y_T_PROCESS_NOISE_VAR 0.01
 #define X_T_1_PROCESS_NOISE_VAR 0.01
 #define Y_T_1_PROCESS_NOISE_VAR 0.01
-#define VEL_PROCESS_NOISE_VAR 0.01
-#define THETA_PROCESS_NOISE_VAR 0.1
+#define VEL_PROCESS_NOISE_VAR 0.02
+#define THETA_PROCESS_NOISE_VAR 0.2
 
 // measurement noise during the correction step of EKF
 // TODO: they are in meters, change them to be in pixels

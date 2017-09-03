@@ -275,7 +275,7 @@ public:
                       int &selected_person_idx)
   {
     selected_person_idx = -1;
-    float min_leg_dist = 3.5;
+    float min_leg_dist = 2.5;
 
     if  (
           tracking_status_ == tracking_status_t::PERSON_SELECTED ||
@@ -356,7 +356,7 @@ public:
           std::cout << "AT: " << human_prev_pose_ << std::endl;
         } 
       }
-      else if (tracking_status_ != tracking_status_t::PERSON_UNDER_CONSIDERATION)
+      else
       {
         // find if we get anything from the legs
         ROS_WARN("lost person searching for legs: ");
@@ -368,6 +368,7 @@ public:
             legDetectionsMsg->people[leg_selected_person_idx].pos.y,
             legDetectionsMsg->people[leg_selected_person_idx].pos.z
           );
+          selected_person_idx = leg_selected_person_idx;
           tracking_status_ = tracking_status_t::PERSON_SELECTED;
           last_update_time_ = send_time.toSec();
           num_seen_person_under_consideration_ = 0;
@@ -393,17 +394,11 @@ public:
       }
 
       last_update_time_ = send_time.toSec();
-      human_prev_pose_.x =  detectionsMsg->people[person_idx].pos.x;
-      human_prev_pose_.y =  detectionsMsg->people[person_idx].pos.y;
-      human_prev_pose_.z =  detectionsMsg->people[person_idx].pos.z;
-      selected_person_idx = person_idx;
-      min_leg_dist = leg_dist;
-
-
-      last_update_time_ = send_time.toSec();
       human_prev_pose_.x =  detectionsMsg->people[selected_person_idx].pos.x;
       human_prev_pose_.y =  detectionsMsg->people[selected_person_idx].pos.y;
       human_prev_pose_.z =  detectionsMsg->people[selected_person_idx].pos.z;
+      
+
       std::cout << "Person found: ";
       std::cout << "Person found at: "  << detectionsMsg->people[selected_person_idx].pos.x << ", " 
                                         << detectionsMsg->people[selected_person_idx].pos.y << ", " 
@@ -433,15 +428,8 @@ public:
     size_t num_seen_person_under_consideration_old = num_seen_person_under_consideration_;
     int selected_person_idx;
     
-    if (peopleDetectionsMsg->people.size())
-    {
-      trackDetections(peopleDetectionsMsg, legDetectionsMsg, send_time, selected_person_idx);
-    }
-    else
-    {
-      tracking_status_ = updateLostStatus(send_time);
-    }
-    
+    trackDetections(peopleDetectionsMsg, legDetectionsMsg, send_time, selected_person_idx);
+        
     if (tracking_status_ != tracking_status_t::PERSON_SELECTED)
     {
       return;
