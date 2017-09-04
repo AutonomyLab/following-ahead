@@ -5,7 +5,6 @@
 	<arg name="person_frame" default="person_raw" />
 	<arg name="use_deadman" default="true" />
 
-	<param name="/use_sim_time" value="false"/>
 	<arg name="move_base_goal_frequency" default="0.5" />
 
 	<!-- Dummy tf for test -->

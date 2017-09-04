@@ -32,6 +32,9 @@
     <arg name="enable_fisheye"      default="false" />
     <arg name="enable_imu"          default="false" />
 
+    <arg name="fisheye_enable_auto_exposure" default="1" />
+    <arg name="fisheye_auto_exposure_mode" default="2" />
+
      <!-- "enable_pointcloud" is set to false by default because rgbd_launch uses standard ROS packages
           to generate point clouds. -->
     <arg name="enable_pointcloud"   default="false" />
@@ -68,6 +71,9 @@
         <param name="fisheye_width"           value="$(arg fisheye_width)" />
         <param name="fisheye_height"          value="$(arg fisheye_height)" />
         <param name="fisheye_fps"             value="$(arg fisheye_fps)" />
+
+        <param name="fisheye_enable_auto_exposure" value="$(arg fisheye_enable_auto_exposure)" />
+        <param name="fisheye_auto_exposure_mode" value="$(arg fisheye_auto_exposure_mode)" />
 
         <remap from="depth"    to="$(arg depth)" />
         <remap from="color"    to="$(arg rgb)" />

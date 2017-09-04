@@ -1,5 +1,4 @@
  <launch>
-  <param name="/use_sim_time" value="true"/>
   <node pkg="robot_pose_ekf" type="robot_pose_ekf" name="robot_pose_ekf">
     <param name="output_frame" value="robot_0/odom_combined"/>
     <param name="base_footprint_frame" value="robot_0/base_footprint" />

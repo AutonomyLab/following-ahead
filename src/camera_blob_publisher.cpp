@@ -78,6 +78,46 @@ public:
     nh_.param("camera_parent_frame", camera_parent_frame_, std::string("laser"));
   }
 
+  void sendCameraTF(ros::Time send_time)
+  {
+    // ----------------------- broadcast camera tf wrt world ---------------------------------
+    tf::StampedTransform camera_tf;
+    camera_tf.child_frame_id_ = "camera"; // source
+    camera_tf.frame_id_ = camera_parent_frame_; // target
+    camera_tf.stamp_ = send_time;
+
+    camera_tf.setOrigin(tf::Vector3( 
+      camera_wrt_laser_x_, 
+      camera_wrt_laser_y_, 
+      camera_wrt_laser_z_
+    )); 
+
+    float pitch_angle = camera_wrt_laser_pitch_ * M_PI / 180.;
+    
+    cv::Point3f basis_x(
+      0, 1, 0
+    );
+
+    cv::Point3f basis_z(
+      -cos(pitch_angle),
+      0,
+      sin(pitch_angle)
+    );
+
+    cv::Point3f basis_y = basis_z.cross(basis_x);
+    
+    tf::Quaternion q;
+    tf::Matrix3x3 rotation(
+      basis_x.x, basis_y.x, basis_z.x,
+      basis_x.y, basis_y.y, basis_z.y,
+      basis_x.z, basis_y.z, basis_z.z 
+    );
+    rotation.getRotation(q);
+    camera_tf.setRotation(q);
+
+    tf_broadcaster_.sendTransform(camera_tf);
+  }
+
   cv::Point3f findPersonCenter(cv_bridge::CvImageConstPtr cv_ptr, std::vector<cv::Point2f> vectPersonPoints, std::vector<float> depthValues)
   {
     // find the center of the person
@@ -124,6 +164,9 @@ public:
 
   void detectionCallback(const yolo2::ImageDetections::ConstPtr &detectionMsg, const sensor_msgs::Image::ConstPtr &depthMsg)
   {
+    ros::Time send_time = ros::Time::now();
+    
+    sendCameraTF(send_time);
 
     std::vector<cv::Point2f> undistortedPoints;
     std::vector<float> depthValues;
@@ -149,7 +192,6 @@ public:
 
     // cv::Mat matPersonSegmented = cv::Mat::zeros(depthMsg->height, depthMsg->width, CV_8UC1);
     
-    ros::Time send_time = ros::Time::now();
     int selected_person_idx = -1;
     float min_leg_dist = 2.5;
 
@@ -182,7 +224,7 @@ public:
           }
 
           float depth = ((float)cv_ptr->image.at<uint16_t>(row, col)) / 1000.0;
-          if (depth < 0.01 || depth > 6.0 || !std::isfinite(depth))
+          if (depth < 0.01 || depth > 3.0 || !std::isfinite(depth))
           {
             continue;
           }
@@ -417,44 +459,6 @@ public:
     relative_tf.setRotation(tf::Quaternion(0, 0, 0, 1));
 
     tf_broadcaster_.sendTransform(relative_tf);
-
-    // ----------------------- broadcast camera tf wrt world ---------------------------------
-    tf::StampedTransform camera_tf;
-    camera_tf.child_frame_id_ = "camera"; // source
-    camera_tf.frame_id_ = camera_parent_frame_; // target
-    camera_tf.stamp_ = transform_stamped.header.stamp;
-
-    camera_tf.setOrigin(tf::Vector3( 
-      camera_wrt_laser_x_, 
-      camera_wrt_laser_y_, 
-      camera_wrt_laser_z_
-    )); 
-
-    float pitch_angle = camera_wrt_laser_pitch_ * M_PI / 180.;
-    
-    cv::Point3f basis_x(
-      0, 1, 0
-    );
-
-    cv::Point3f basis_z(
-      -cos(pitch_angle),
-      0,
-      sin(pitch_angle)
-    );
-
-    cv::Point3f basis_y = basis_z.cross(basis_x);
-    
-    tf::Quaternion q;
-    tf::Matrix3x3 rotation(
-      basis_x.x, basis_y.x, basis_z.x,
-      basis_x.y, basis_y.y, basis_z.y,
-      basis_x.z, basis_y.z, basis_z.z 
-    );
-    rotation.getRotation(q);
-    camera_tf.setRotation(q);
-
-    tf_broadcaster_.sendTransform(camera_tf);
-
   }
 };
 

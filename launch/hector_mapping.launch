@@ -3,7 +3,6 @@
 <launch>
  
 
-  <param name="/use_sim_time" value="false"/>
 
   <node pkg="stage_ros" type="stageros" name="stageros_node" args="$(find person_follower)/worlds/simple.world" />
   

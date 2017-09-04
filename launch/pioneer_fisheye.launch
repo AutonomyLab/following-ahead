@@ -7,14 +7,33 @@
 	<arg name="laser_frame" default="laser" />
 	<arg name="laser_frame_back" default="laser_back" />
 
-	<param name="/use_sim_time" value="false"/>
+	<param name="/use_sim_time" value="true"/>
 	<arg name="move_base_goal_frequency" default="0.5" />
+
+	<node pkg="person_follower" type="clock_publisher_node" name="clock_publisher_node" />
 
 	<node pkg="tf" type="static_transform_publisher" name="static_transform_publisher1" args="0.11 0 0.220 0 0 0 $(arg base_frame) $(arg laser_frame) 50"/>
 
 	<node pkg="tf" type="static_transform_publisher" name="static_transform_publisher2" args="-0.10 -0.05 0.195 3.141592653589793 0 0 $(arg laser_frame) $(arg laser_frame_back) 50"/>
 
 	<!-- <node pkg="person_follower" type="relative_kinect_publisher.py" name="relative_kinect_publisher" />  -->
+
+	<node pkg="gmapping" type="slam_gmapping" name="slam_gmapping" output="screen">
+		<param name="odom_frame" value="odom"/>
+		<param name="base_frame" value="$(arg base_frame)"/>
+		<param name="map_frame" value="$(arg map_frame)"/>
+	    <param name="map_update_interval" value="0.025"/>
+	    <param name="particles" value="20" />
+	    <param name="delta" value="0.05"/>
+	    <param name="maxRange" value="7"/>
+	    <param name="xmin" value="-15"/>
+	    <param name="ymin" value="-15"/>
+	    <param name="xmax" value="15"/>
+	    <param name="ymax" value="15"/>
+	    <rosparam command="load" file="$(find person_follower)/config_nav/mapper_params.yaml" />
+	</node>
+
+	<include file="$(find person_follower)/config_nav_pioneer/move_base.xml" />
 	
 	<include file="$(find person_follower)/launch/yolo.launch" />
 	<node pkg="leg_detector" type="leg_detector" name="leg_detector" args="$(find leg_detector)/config/trained_leg_detector.yaml" output="screen">
@@ -42,18 +61,6 @@
 		<remap from="/scan" to="/back_scan" />
 	</node>
 	
-	<node pkg="person_follower" type="person_follower_node" name="person_follower_node" output="screen">
-		<param name="base_frame" value="$(arg base_frame)" />
-		<param name="odom_frame" value="$(arg odom_frame)" />
-		<param name="map_frame" value="$(arg map_frame)" />
-		<param name="person_frame" value="$(arg person_frame)" />
-		<param name="use_deadman" value="$(arg use_deadman)" type="bool"/>
-
-		<remap from="/husky/odom" to="/odom" />
-		<remap from="/husky/cmd_vel" to="/cmd_vel" />
-	</node>
-
-	
 	<node name="nav_goal_throttler" type="throttle" pkg="topic_tools" args="messages /move_base_simple/goal_unthrottled $(arg move_base_goal_frequency) /move_base_simple/goal" />
 
 	<!-- nodelets and its manager for cmd_vel mux -->
@@ -65,23 +72,6 @@
 	</node>
 	<!-- nodelets and its manager for cmd_vel mux -->
 
-	<node pkg="gmapping" type="slam_gmapping" name="slam_gmapping" output="screen">
-		<param name="odom_frame" value="odom"/>
-		<param name="base_frame" value="$(arg base_frame)"/>
-		<param name="map_frame" value="$(arg map_frame)"/>
-	    <param name="map_update_interval" value="0.025"/>
-	    <param name="particles" value="20" />
-	    <param name="delta" value="0.05"/>
-	    <param name="maxRange" value="7"/>
-	    <param name="xmin" value="-15"/>
-	    <param name="ymin" value="-15"/>
-	    <param name="xmax" value="15"/>
-	    <param name="ymax" value="15"/>
-	    <rosparam command="load" file="$(find person_follower)/config_nav/mapper_params.yaml" />
-	</node>
-
-	<include file="$(find person_follower)/config_nav_pioneer/move_base.xml" />
-
 	<node pkg="rviz" type="rviz" name="rviz" output="screen" args="-d $(find person_follower)/config/pioneer.rviz"/>
 
 	<node pkg="joy" type="joy_node" name="joy_node" output="screen">
@@ -90,14 +80,25 @@
 		<param name="autorepeat_rate" value="10" />
 	</node>
 
-	<include file="$(find person_follower)/launch/hydro.launch">
-		<arg name="laser_frame" value="$(arg laser_frame)" />
-        <arg name="laser_frame_back" value="$(arg laser_frame_back)" />
-	</include>
-	
 	<node pkg="teleop_twist_joy" type="teleop_node" name="teleop_node">
 		<remap from="joy" to="teleop/joy" />
 		<remap from="cmd_vel" to="teleop_cmd_vel" />
 		<param name="enable_button" value="1" />
 	</node>
+	
+	<node pkg="person_follower" type="person_follower_node" name="person_follower_node" output="screen">
+		<param name="base_frame" value="$(arg base_frame)" />
+		<param name="odom_frame" value="$(arg odom_frame)" />
+		<param name="map_frame" value="$(arg map_frame)" />
+		<param name="person_frame" value="$(arg person_frame)" />
+		<param name="use_deadman" value="$(arg use_deadman)" type="bool"/>
+
+		<remap from="/husky/odom" to="/odom" />
+		<remap from="/husky/cmd_vel" to="/cmd_vel" />
+	</node>
+
+	<include file="$(find person_follower)/launch/hydro.launch">
+		<arg name="laser_frame" value="$(arg laser_frame)" />
+        <arg name="laser_frame_back" value="$(arg laser_frame_back)" />
+	</include>
 </launch>

@@ -86,7 +86,7 @@
 #define ROBOT_VELOCITY_VARIANCE_SCALING 0.5
 
 // lookahead distance (m) for prediction
-#define PREDICTION_LOOKAHEAD_DISTANCE 2.5 //4.5
+#define PREDICTION_LOOKAHEAD_DISTANCE 4.0 //4.5
 
 #define MINIMUM_DISTANCE_BETWEEN_OBSTACLES 0.7
 
@@ -102,7 +102,7 @@
 #define OCCUPANCY_THRESHOLD 70
 #define OBSTACLE_RAYCASTING_PERTURBATION 5
 // distance to maintain from the obstacles (for the motion model)
-#define OBSTACLE_CLEARANCE_DISTANCE 1.0 // 1.5
+#define OBSTACLE_CLEARANCE_DISTANCE 0.6 // 1.5
 // the normalized cost difference below this will count as a draw
 #define NORMALIZED_COST_THRESHOLD 0.04
 // dilation to inflate obstacles in map (in meters)

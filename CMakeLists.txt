@@ -174,6 +174,7 @@ add_executable(fisheye_blob_publisher_node src/fisheye_blob_publisher.cpp)
 add_executable(simulation_interface_node src/simulation_interface_node.cpp)
 add_executable(linear_motion_model_test src/linear_motion_model_test.cpp)
 add_executable(fisheye_to_mono8_publisher_node src/fisheye_to_mono8_publisher.cpp)
+add_executable(clock_publisher_node src/clock_publisher.cpp)
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
 ## target back to the shorter version for ease of user use
@@ -188,6 +189,7 @@ add_dependencies(fisheye_blob_publisher_node ${${PROJECT_NAME}_EXPORTED_TARGETS}
 add_dependencies(simulation_interface_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 add_dependencies(linear_motion_model_test ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 add_dependencies(fisheye_to_mono8_publisher_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+add_dependencies(clock_publisher_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 ## Specify libraries to link a library or executable target against
 target_link_libraries(person_follower_node
@@ -226,6 +228,13 @@ target_link_libraries(linear_motion_model_test
 )
 
 target_link_libraries(fisheye_to_mono8_publisher_node
+  ${catkin_LIBRARIES}
+  #${OpenCV_LIBRARIES}
+  ${OPENCV_LIB}
+  ${PROJECT_NAME}
+)
+
+target_link_libraries(clock_publisher_node
   ${catkin_LIBRARIES}
   #${OpenCV_LIBRARIES}
   ${OPENCV_LIB}
