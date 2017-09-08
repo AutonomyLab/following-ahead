@@ -7,7 +7,7 @@
 
 class Filter
 {
-private:
+protected:
 	 cv::Point3f *points;
 	 unsigned int iterator;
 	 size_t length;

@@ -1,7 +1,6 @@
 #ifndef ROBOT_HPP
 #define ROBOT_HPP
 
-#include "filter.hpp"
 #include <exception>
 
 #include "pid.h"
@@ -33,6 +32,7 @@
 #include "ParticleFilter.hpp"
 #include "PredictionParticleFilter.hpp"
 #include "linear_motion_model.hpp"
+#include "orientation_filter.hpp"
 
 class Robot
 {
@@ -107,6 +107,8 @@ private:
     nav_msgs::OccupancyGrid map_occupancy_grid_;
 
     double blob_measurements_timeout_;
+
+    OrientationFilter person_orientation_filter;
 public:
     Robot(  ros::NodeHandle n, 
             std::string base_frame, std::string odom_frame, 

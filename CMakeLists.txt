@@ -144,6 +144,7 @@ include_directories(
 add_library(${PROJECT_NAME}
   src/pid.cpp
   src/filter.cpp
+  src/orientation_filter.cpp
   src/robot.cpp
   src/kalman.cpp
   src/utils.cpp
