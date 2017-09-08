@@ -3,11 +3,13 @@
 	<arg name="odom_frame" default="odom" />
 	<arg name="map_frame" default="map" />
 	<arg name="person_frame" default="person_raw" />
-	<arg name="use_deadman" default="true" />
+	<arg name="use_deadman" default="false" />
 	<arg name="laser_frame" default="laser" />
 
 	<param name="/use_sim_time" value="true"/>
 	<arg name="move_base_goal_frequency" default="0.5" />
+
+	<node pkg="person_follower" type="clock_publisher_node" name="clock_publisher_node" />
 
 	<!-- Dummy tf for test -->
 	<!-- <node pkg="tf" type="static_transform_publisher" name="static_transform_publisher0" args="0 0 0 0 0 0 map base_link 50"/>
