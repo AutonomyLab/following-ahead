@@ -84,6 +84,18 @@ public:
     static bool checkObstacleBetween(cv::Point point1, cv::Point point2, cv::Mat &map, cv::Mat *debug_map=NULL);
 
     /**
+     *
+     * @brief check in both obstacle directions if we can go there
+     */
+    static void getViablDirections(
+        cv::Point object_point,
+        float obstacle_orientations[2],
+        cv::Mat &map,
+        float map_resolution,
+        std::vector<size_t> &viable_obstacle_indices
+    );
+
+    /**
      * @brief return the angle of the vector that is in the other direction (-> to <-)
      */
     float oppositeAngle(float angle);

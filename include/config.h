@@ -6,7 +6,7 @@
 #define DISTANCE_EPSILON 0.08
 #define VELOCITY_ERROR_EPSILON 1.0
 #define POSITION_ERROR_EPSILON 1.0
-#define ORIENTATION_ERROR_EPSILON 1.5
+#define ORIENTATION_ERROR_EPSILON 1.0
 
 #define PERSON_FILTER_SIZE 1
 #define ROBOT_FILTER_SIZE 1
@@ -74,7 +74,7 @@
 #define Y_T_INIT_ERROR_VAR 0.01
 #define X_T_1_INIT_ERROR_VAR 0.01
 #define Y_T_1_INIT_ERROR_VAR 0.01
-#define VEL_INIT_ERROR_VAR 1
+#define VEL_INIT_ERROR_VAR 0.1
 #define THETA_INIT_ERROR_VAR 1.7
 
 // in rad^2
@@ -115,6 +115,9 @@
 #define PERSON_LOST_TIMEOUT 2
 
 #define PERSON_ORIENTATION_FILTER_SIZE 10
+
+// distance to lookahead to see if there are deadends
+#define DEADEND_LOOKAHEAD_DISTANCE 1.0
 
 #define FOV 70.0
 

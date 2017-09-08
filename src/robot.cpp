@@ -794,8 +794,8 @@ void Robot::spinOnce() try
   // tell the robot to go to the predicted position
   if (
     // true 
-    est_v > DISTANCE_EPSILON*dt &&
-    theta_stddev < ORIENTATION_ERROR_EPSILON
+    est_v > DISTANCE_EPSILON*dt
+    // theta_stddev < ORIENTATION_ERROR_EPSILON
     // velocity_stddev < VELOCITY_ERROR_EPSILON &&
     // target_x_stddev < POSITION_ERROR_EPSILON &&
     // target_y_stddev < POSITION_ERROR_EPSILON
