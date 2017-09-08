@@ -18,6 +18,7 @@
 #include "utils.hpp"
 
 #include <sstream>
+#include <fstream>
 
 #include <limits> 
 #include <vector> 
@@ -31,28 +32,60 @@
 class VisualizeTrajectory
 {
 public:
-  VisualizeTrajectory(ros::NodeHandle nh) : nh_(nh)
+  VisualizeTrajectory(ros::NodeHandle nh) 
+    : nh_(nh),
+      trajectory_fs_("trajecty_fs.txt", std::ofstream::out)
   {
-    nh_.param("base_frame", base_frame_, "base_frame");
-    nh_.param("odom_frame", odom_frame_, "odom_frame");
-    nh_.param("map_frame", map_frame_, "map_frame");
-    nh_.param("person_frame", person_frame_, "person_frame");
+    nh_.param("base_frame", base_frame_, std::string("base_link"));
+    nh_.param("odom_frame", odom_frame_, std::string("odom"));
+    nh_.param("map_frame", map_frame_, std::string("map"));
+    nh_.param("person_frame", person_frame_, std::string("person_raw"));
 
-    blob_sub_.subscribe(n, "/person_follower/groundtruth_pose", 10);
-    blob_tf_filter_ = new tf::MessageFilter<geometry_msgs::TransformStamped>(groundtruth_sub_, tf_listener_, base_frame_, 10);
+    blob_sub_.subscribe(nh_, "/person_follower/groundtruth_pose", 10);
+    blob_tf_filter_ = new tf::MessageFilter<geometry_msgs::TransformStamped>(blob_sub_, tf_listener_, base_frame_, 10);
     blob_tf_filter_->registerCallback( boost::bind(&VisualizeTrajectory::blobCallback, this, _1) );
 
-    odom_topic_subscriber_ = n.subscribe("/husky/odom", 1, &VisualizeTrajectory::odometryCallback, this);
+    odom_topic_subscriber_ = nh_.subscribe("/odom", 1, &VisualizeTrajectory::odometryCallback, this);
+  }
+
+  ~VisualizeTrajectory()
+  {
+    trajectory_fs_.close();
   }
 
   void blobCallback(const boost::shared_ptr<const geometry_msgs::TransformStamped>& msg)
   {
-    ROS_INFO("blobCallback");
+    // ROS_INFO("blobCallback");
   }
 
   void odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& msg)
   {
-    ROS_INFO("odometryCallback");
+    tf::StampedTransform map_T_base_frame;
+    tf::StampedTransform map_T_person_frame;
+
+    try
+    {
+      
+      tf_listener_.lookupTransform(map_frame_, base_frame_,
+                                ros::Time(0), // msg->header.stamp, 
+                                map_T_base_frame);
+      
+      tf_listener_.lookupTransform(map_frame_, person_frame_,
+                                  ros::Time(0), // msg->header.stamp, 
+                                  map_T_person_frame);
+    }
+    catch (tf::TransformException ex)
+    {
+      ROS_ERROR("TF error in odom update %s", ex.what());
+      return;
+      // ros::Duration(1.0).sleep();
+    }
+
+    trajectory_fs_  << map_T_base_frame.getOrigin().getX() << " "
+                    << map_T_base_frame.getOrigin().getY() << " "
+                    << map_T_person_frame.getOrigin().getX() << " "
+                    << map_T_person_frame.getOrigin().getY() << " "
+                    << std::endl;
   }
 
 private:
@@ -60,8 +93,14 @@ private:
   message_filters::Subscriber<geometry_msgs::TransformStamped> blob_sub_;
   tf::TransformListener tf_listener_; 
   tf::MessageFilter<geometry_msgs::TransformStamped> * blob_tf_filter_;
-
   ros::Subscriber odom_topic_subscriber_;
+
+  std::string base_frame_;
+  std::string odom_frame_;
+  std::string map_frame_;
+  std::string person_frame_;
+
+  std::ofstream trajectory_fs_;
 };
 
 int main(int argc, char **argv)
