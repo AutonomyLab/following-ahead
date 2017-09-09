@@ -607,6 +607,8 @@ void Robot::spinOnce() try
           person_kalman_->init(0, initState);
           person_orientation_filter.initialize(theta);
 
+          isKalmanValid = true;
+
           ROS_INFO("EKF initialized");
           ROS_INFO(
             "start state: speed- %f, theta- %f", 
@@ -886,9 +888,9 @@ void Robot::spinOnce() try
     else // if (!isDeadManActive)
     {
       // cancel anything that's going on
-      ROS_WARN("deadman off or goal behind the robot, reinitializing");
-      person_kalman_->reintialize();
-      prediction_particle_filter_.reintialize();
+      ROS_WARN("deadman off or goal behind the robot, stopping");
+      // person_kalman_->reintialize();
+      // prediction_particle_filter_.reintialize();
       throw OdometryException();
     }
   }
