@@ -62,15 +62,14 @@ public:
   {
     tf::StampedTransform map_T_base_frame;
     tf::StampedTransform map_T_person_frame;
-
     try
     {
       
-      tf_listener_.lookupTransform(map_frame_, base_frame_,
+      tf_listener_.lookupTransform(base_frame_, map_frame_,
                                 ros::Time(0), // msg->header.stamp, 
                                 map_T_base_frame);
       
-      tf_listener_.lookupTransform(map_frame_, person_frame_,
+      tf_listener_.lookupTransform(person_frame_, map_frame_,
                                   ros::Time(0), // msg->header.stamp, 
                                   map_T_person_frame);
     }
@@ -81,10 +80,10 @@ public:
       // ros::Duration(1.0).sleep();
     }
 
-    trajectory_fs_  << map_T_base_frame.getOrigin().getX() << " "
-                    << map_T_base_frame.getOrigin().getY() << " "
-                    << map_T_person_frame.getOrigin().getX() << " "
-                    << map_T_person_frame.getOrigin().getY() << " "
+    trajectory_fs_  << map_T_base_frame.inverse().getOrigin().getX() << " "
+                    << map_T_base_frame.inverse().getOrigin().getY() << " "
+                    << map_T_person_frame.inverse().getOrigin().getX() << " "
+                    << map_T_person_frame.inverse().getOrigin().getY() << " "
                     << std::endl;
   }
 

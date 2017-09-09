@@ -696,7 +696,7 @@ int LinearMotionModel::chooseObstacleDirection(
   cv::Point2f current_object_destinations_vector[2];
 
   size_t num_going_back=0;
-  std::cout << "Original vector: " << original_object_destination_vector << std::endl;
+  // std::cout << "Original vector: " << original_object_destination_vector << std::endl;
   for (size_t i = 0; i < 2; i++)
   {
     current_object_destinations_vector[i] = cv::Point2f(
@@ -706,8 +706,8 @@ int LinearMotionModel::chooseObstacleDirection(
     current_object_destinations_vector[i] /= cv::norm(current_object_destinations_vector[i]);
 
     float object_vector_angle = acos(original_object_destination_vector.dot(current_object_destinations_vector[i])) * 180 / M_PI;
-    std::cout << "New vector " << i << ": " << current_object_destinations_vector[i] << std::endl;
-    std::cout << "Current to new angle: " << object_vector_angle << std::endl;
+    // std::cout << "New vector " << i << ": " << current_object_destinations_vector[i] << std::endl;
+    // std::cout << "Current to new angle: " << object_vector_angle << std::endl;
 
     if  (
           fabs(object_vector_angle) > 130
@@ -720,7 +720,7 @@ int LinearMotionModel::chooseObstacleDirection(
 
   if (num_going_back >= 2)
   {
-    ROS_ERROR("both the lines are going back, which is impossible!!!");
+    // ROS_ERROR("both the lines are going back, which is impossible!!!");
     return 1;
   }
 
@@ -831,23 +831,23 @@ int LinearMotionModel::chooseObstacleDirection(
                   )
           {
             // we have a clear winner (the cost wasn't similar)
-            ROS_ERROR("Using cost %d to break tie", j);
+            // ROS_ERROR("Using cost %d to break tie", j);
             total_cost[i] += cost_weights[j] * costs[i][j];
           }
         }
       }
   
-      ROS_INFO(
-        "Wall1: %f, Opposite wall: %f",
-        ol_theta[0] * 180 / M_PI,
-        ol_theta[1] * 180 / M_PI
-      );
-      ROS_INFO("Winners: %d, %d, %d, %d", cost_winners[0], cost_winners[1], cost_winners[2], cost_winners[3]);
-      ROS_INFO(
-        "Cost[0]: %f, %f, %f, %f, Cost[1]: %f, %f, %f, %f", 
-        costs[0][0], costs[0][1], costs[0][2], costs[0][3],
-        costs[1][0], costs[1][1], costs[1][2], costs[1][3]
-      );
+      // ROS_INFO(
+      //   "Wall1: %f, Opposite wall: %f",
+      //   ol_theta[0] * 180 / M_PI,
+      //   ol_theta[1] * 180 / M_PI
+      // );
+      // ROS_INFO("Winners: %d, %d, %d, %d", cost_winners[0], cost_winners[1], cost_winners[2], cost_winners[3]);
+      // ROS_INFO(
+      //   "Cost[0]: %f, %f, %f, %f, Cost[1]: %f, %f, %f, %f", 
+      //   costs[0][0], costs[0][1], costs[0][2], costs[0][3],
+      //   costs[1][0], costs[1][1], costs[1][2], costs[1][3]
+      // );
   
       // TODO: filter out any prediction that is going towards the object
       chosen_idx = (total_cost[1] < total_cost[0]) ? 1 : 0;
@@ -855,12 +855,12 @@ int LinearMotionModel::chooseObstacleDirection(
   }
   destination_point_out = destination_points[chosen_idx];
 
-  ROS_INFO(
-    "Robot: %f, Chosen wall: %f, Opposite wall: %f",
-    RP_theta * 180 / M_PI,
-    ol_theta[chosen_idx] * 180 / M_PI,
-    ol_theta[1-chosen_idx] * 180 / M_PI
-  );
+  // ROS_INFO(
+  //   "Robot: %f, Chosen wall: %f, Opposite wall: %f",
+  //   RP_theta * 180 / M_PI,
+  //   ol_theta[chosen_idx] * 180 / M_PI,
+  //   ol_theta[1-chosen_idx] * 180 / M_PI
+  // );
 
   return 0;
 }

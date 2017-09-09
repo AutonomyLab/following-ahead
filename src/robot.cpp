@@ -286,51 +286,51 @@ cv::Point3f Robot::updatePrediction()
 
   cv::Mat debug_map = map_image_.clone();
   
-  bool is_robot_to_prediction_feasible = true;
-  cv::LineIterator it = robot_prediction_line_iterator;
-  for (size_t i = 0; i < robot_prediction_line_iterator.count; i++, it++)
-  {
-    if (map_image_.at<uint8_t>(it.pos()) == 255)
-    {
-      is_robot_to_prediction_feasible = false;
-      break;
-    }
-  }
+  // bool is_robot_to_prediction_feasible = true;
+  // cv::LineIterator it = robot_prediction_line_iterator;
+  // for (size_t i = 0; i < robot_prediction_line_iterator.count; i++, it++)
+  // {
+  //   if (map_image_.at<uint8_t>(it.pos()) == 255)
+  //   {
+  //     is_robot_to_prediction_feasible = false;
+  //     break;
+  //   }
+  // }
 
-  if (is_robot_to_prediction_feasible)
-  {
-    // also check if it is very close to obstacles
-    cv::Point new_prediction_image_coordinates;
-    is_robot_to_prediction_feasible = LinearMotionModel::checkObjectDestinationFeasibility(
-      person_image_coordinates, 
-      prediction_image_coordinates, 
-      map_image_, map_occupancy_grid_.info.resolution,
-      new_prediction_image_coordinates,
-      debug_map
-    );
+  // if (is_robot_to_prediction_feasible)
+  // {
+  //   // also check if it is very close to obstacles
+  //   cv::Point new_prediction_image_coordinates;
+  //   is_robot_to_prediction_feasible = LinearMotionModel::checkObjectDestinationFeasibility(
+  //     person_image_coordinates, 
+  //     prediction_image_coordinates, 
+  //     map_image_, map_occupancy_grid_.info.resolution,
+  //     new_prediction_image_coordinates,
+  //     debug_map
+  //   );
 
-    if (is_robot_to_prediction_feasible)
-    {
-      // don't update the prediction
-      prediction_global_prev_ = prediction_global_;
-      cv::circle(debug_map, person_image_coordinates, 8, 255);
-      cv::circle(debug_map, prediction_image_coordinates, 5, 255);
-    }
-    else
-    {
-      ROS_WARN("Destination close to obstacle, running the linear motion model on it");
-      std::cout << "prediction_image_coordinates: " << prediction_image_coordinates << std::endl;
-      // increasing the length
-      prediction_image_coordinates = new_prediction_image_coordinates;
-      std::cout << "new_prediction_image_coordinates: " << prediction_image_coordinates << std::endl;
+  //   if (is_robot_to_prediction_feasible)
+  //   {
+  //     // don't update the prediction
+  //     prediction_global_prev_ = prediction_global_;
+  //     cv::circle(debug_map, person_image_coordinates, 8, 255);
+  //     cv::circle(debug_map, prediction_image_coordinates, 5, 255);
+  //   }
+  //   else
+  //   {
+  //     ROS_WARN("Destination close to obstacle, running the linear motion model on it");
+  //     std::cout << "prediction_image_coordinates: " << prediction_image_coordinates << std::endl;
+  //     // increasing the length
+  //     prediction_image_coordinates = new_prediction_image_coordinates;
+  //     std::cout << "new_prediction_image_coordinates: " << prediction_image_coordinates << std::endl;
       
-      cv::circle(debug_map, new_prediction_image_coordinates, 15, 255);
-      is_robot_to_prediction_feasible = false;
+  //     cv::circle(debug_map, new_prediction_image_coordinates, 15, 255);
+  //     is_robot_to_prediction_feasible = false;
     
-    }
-  }
+  //   }
+  // }
   
-  if (!is_robot_to_prediction_feasible)
+  // if (!is_robot_to_prediction_feasible)
   {
     
     cv::Point new_person_image_coordinates, new_prediction_image_coordinates;
@@ -441,14 +441,41 @@ void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& 
 
 void Robot::spinOnce() try
 {
+  bool is_using_predicted_human = false;
+  
+  // check if the robot is rotating
   if (current_odometry_.twist.twist.angular.z > 0.15)
   {
     ROS_WARN("Pure rotation detection, not doing updates!!");
-    return;
+    is_using_predicted_human = true;
   }
-  float dt = current_relative_pose_.header.stamp.toSec() - previous_relative_pose_.header.stamp.toSec();
-  bool is_using_predicted_human = false;
+
+  // check if the person is opposite of estimated direction
+  {
+    if (person_kalman_->isInitialized())
+    {
+      cv::Mat state = person_kalman_->state();
+      float est_theta = state.at<float>(THETA_IDX, 0);
+
+      float theta = atan2(
+        absolute_tf_pose_human_.getOrigin().getY() - absolute_tf_pose_human_previous_.getOrigin().getY(),
+        absolute_tf_pose_human_.getOrigin().getX() - absolute_tf_pose_human_previous_.getOrigin().getX()
+      );
+
+      float angle = vectorAngle(
+        cv::Point2f(cos(est_theta), sin(est_theta)),
+        cv::Point2f(cos(theta), sin(theta))
+      );
+
+      if (angle > 120*M_PI/180)
+      {
+        ROS_ERROR("new point is behind angle: %f",angle*180/M_PI);
+        is_using_predicted_human = true;
+      }
+    }
+  }
   
+  float dt = current_relative_pose_.header.stamp.toSec() - previous_relative_pose_.header.stamp.toSec();
   // check if we are still getting blob readings
   if (
         current_relative_pose_.header.stamp.toSec() &&  // is valid
@@ -476,19 +503,6 @@ void Robot::spinOnce() try
       if (last_human_pose_update && person_kalman_->isInitialized())
       {
         ROS_WARN("no new blob measurement, using last estimated velocity for update");
-        
-        dt = ros::Time::now().toSec() - last_human_pose_update;
-        if (dt <= 0)
-        {
-          ROS_ERROR("dt <= 0");
-          return;
-        }
-        if (updateHumanPrediction(dt))
-        {
-          ROS_WARN("prediction for person failed, returning...");
-          return;   
-        }
-
         is_using_predicted_human = true;
       }
       else
@@ -502,6 +516,22 @@ void Robot::spinOnce() try
     }
   }
 
+  if (is_using_predicted_human)
+  {
+    float dt = ros::Time::now().toSec() - last_human_pose_update;
+    if (dt <= 0)
+    {
+      ROS_ERROR("dt <= 0");
+      return;
+    }
+    if (updateHumanPrediction(dt))
+    {
+      ROS_WARN("prediction for person failed, returning...");
+      return;   
+    }
+  }
+
+  
   // if the time between current and previous is too large (when we lose the person), reinitialize the filters 
   if (dt > MAX_DEL_TIME)
   {
@@ -595,26 +625,42 @@ void Robot::spinOnce() try
             absolute_tf_pose_human_.getOrigin().getX() - absolute_tf_pose_human_previous_.getOrigin().getX()
           );
           float velocity = fabs(person_movement / dt);
-          
-          cv::Mat initState = cv::Mat::zeros(NUM_STATES, 1, CV_32F);
-          initState.at<float>(X_T_IDX, 0) = absolute_tf_pose_human_.getOrigin().getX();
-          initState.at<float>(Y_T_IDX, 0) = absolute_tf_pose_human_.getOrigin().getY();
-          initState.at<float>(X_T_1_IDX, 0) = absolute_tf_pose_human_previous_.getOrigin().getX();
-          initState.at<float>(Y_T_1_IDX, 0) = absolute_tf_pose_human_previous_.getOrigin().getY();
-          initState.at<float>(VEL_IDX, 0) = velocity;
-          initState.at<float>(THETA_IDX, 0) = theta;
-  
-          person_kalman_->init(0, initState);
-          person_orientation_filter.initialize(theta);
 
-          isKalmanValid = true;
+          // check if the person is walking towards the robot
+          float robot_theta = tf::getYaw(r0_T_map.inverse().getRotation());
 
-          ROS_INFO("EKF initialized");
-          ROS_INFO(
-            "start state: speed- %f, theta- %f", 
-            initState.at<float>(VEL_IDX, 0),
-            initState.at<float>(THETA_IDX, 0)
+          float robot_human_angle = vectorAngle(
+            cv::Point2f(cos(theta), sin(theta)),
+            cv::Point2f(cos(robot_theta), sin(robot_theta))
           );
+
+          if (robot_human_angle < 120. * M_PI / 180.)
+          {  
+            cv::Mat initState = cv::Mat::zeros(NUM_STATES, 1, CV_32F);
+            initState.at<float>(X_T_IDX, 0) = absolute_tf_pose_human_.getOrigin().getX();
+            initState.at<float>(Y_T_IDX, 0) = absolute_tf_pose_human_.getOrigin().getY();
+            initState.at<float>(X_T_1_IDX, 0) = absolute_tf_pose_human_previous_.getOrigin().getX();
+            initState.at<float>(Y_T_1_IDX, 0) = absolute_tf_pose_human_previous_.getOrigin().getY();
+            initState.at<float>(VEL_IDX, 0) = velocity;
+            initState.at<float>(THETA_IDX, 0) = theta;
+    
+            person_kalman_->init(0, initState);
+            person_orientation_filter.initialize(theta);
+
+            isKalmanValid = true;
+
+            ROS_INFO("EKF initialized");
+            // ROS_INFO(
+            //   "start state: speed- %f, theta- %f", 
+            //   initState.at<float>(VEL_IDX, 0),
+            //   initState.at<float>(THETA_IDX, 0)
+            // );
+          }
+          else
+          {
+            ROS_ERROR("Person backing off from robot, not initializing");
+            isKalmanValid = false;
+          }
         }
         else
         {
@@ -631,13 +677,12 @@ void Robot::spinOnce() try
     absolute_tf_pose_human_previous_ = absolute_tf_pose_human_;
     last_human_pose_update = ros::Time::now().toSec();  
   
-      
     if (!isKalmanValid)
     {
       person_kalman_->reintialize();
       throw OdometryException();
     }
-  
+
     float bearing_angle = atan2(human_relative_pose.y, -human_relative_pose.x);
     float bearing_range = sqrt(
       pow(human_relative_pose.x, 2) +
@@ -776,7 +821,7 @@ void Robot::spinOnce() try
   prediction_kalman_transform.stamp_ = ros::Time::now();
 
   // use filtered theta
-  est_theta = person_orientation_filter.getFilter();
+  // est_theta = person_orientation_filter.getFilter();
 
   float prediction_x = est_x + cos(est_theta) * PREDICTION_LOOKAHEAD_DISTANCE;
   float prediction_y = est_y + sin(est_theta) * PREDICTION_LOOKAHEAD_DISTANCE;
@@ -803,8 +848,6 @@ void Robot::spinOnce() try
     // target_y_stddev < POSITION_ERROR_EPSILON
   )
   {
-    ROS_ERROR("vel: %f, stddev: %f", est_v, theta_stddev);
-
     cv::Point3f target_position(est_x, est_y, 0);
     cv::Point3f target_position_stddev(
       target_x_stddev, target_y_stddev, 0

@@ -53,8 +53,8 @@
 #define THETA_IDX 5
 // Infinite impulse response (IIR) filter for velocity and orientation
 // higher these values, more importance to the new readings
-#define VEL_IIR_ALPHA 0.3
-#define THETA_IIR_ALPHA 0.4 // 0.01
+#define VEL_IIR_ALPHA 0.1
+#define THETA_IIR_ALPHA 0.1 // 0.01
 
 // process noise during the prediction step of EKF
 #define X_T_PROCESS_NOISE_VAR 0.01
@@ -114,7 +114,7 @@
 #define WAYPOINT_LOOP_LIMIT 5
 #define PERSON_LOST_TIMEOUT 2
 
-#define PERSON_ORIENTATION_FILTER_SIZE 17
+#define PERSON_ORIENTATION_FILTER_SIZE 7
 
 // distance to lookahead to see if there are deadends
 #define DEADEND_LOOKAHEAD_DISTANCE 0.50
