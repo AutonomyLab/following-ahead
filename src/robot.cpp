@@ -286,51 +286,51 @@ cv::Point3f Robot::updatePrediction()
 
   cv::Mat debug_map = map_image_.clone();
   
-  bool is_robot_to_prediction_feasible = true;
-  cv::LineIterator it = robot_prediction_line_iterator;
-  for (size_t i = 0; i < robot_prediction_line_iterator.count; i++, it++)
-  {
-    if (map_image_.at<uint8_t>(it.pos()) == 255)
-    {
-      is_robot_to_prediction_feasible = false;
-      break;
-    }
-  }
+  // bool is_robot_to_prediction_feasible = true;
+  // cv::LineIterator it = robot_prediction_line_iterator;
+  // for (size_t i = 0; i < robot_prediction_line_iterator.count; i++, it++)
+  // {
+  //   if (map_image_.at<uint8_t>(it.pos()) == 255)
+  //   {
+  //     is_robot_to_prediction_feasible = false;
+  //     break;
+  //   }
+  // }
 
-  if (is_robot_to_prediction_feasible)
-  {
-    // also check if it is very close to obstacles
-    cv::Point new_prediction_image_coordinates;
-    is_robot_to_prediction_feasible = LinearMotionModel::checkObjectDestinationFeasibility(
-      person_image_coordinates, 
-      prediction_image_coordinates, 
-      map_image_, map_occupancy_grid_.info.resolution,
-      new_prediction_image_coordinates,
-      debug_map
-    );
+  // if (is_robot_to_prediction_feasible)
+  // {
+  //   // also check if it is very close to obstacles
+  //   cv::Point new_prediction_image_coordinates;
+  //   is_robot_to_prediction_feasible = LinearMotionModel::checkObjectDestinationFeasibility(
+  //     person_image_coordinates, 
+  //     prediction_image_coordinates, 
+  //     map_image_, map_occupancy_grid_.info.resolution,
+  //     new_prediction_image_coordinates,
+  //     debug_map
+  //   );
 
-    if (is_robot_to_prediction_feasible)
-    {
-      // don't update the prediction
-      prediction_global_prev_ = prediction_global_;
-      cv::circle(debug_map, person_image_coordinates, 8, 255);
-      cv::circle(debug_map, prediction_image_coordinates, 5, 255);
-    }
-    else
-    {
-      ROS_WARN("Destination close to obstacle, running the linear motion model on it");
-      std::cout << "prediction_image_coordinates: " << prediction_image_coordinates << std::endl;
-      // increasing the length
-      prediction_image_coordinates = new_prediction_image_coordinates;
-      std::cout << "new_prediction_image_coordinates: " << prediction_image_coordinates << std::endl;
+  //   if (is_robot_to_prediction_feasible)
+  //   {
+  //     // don't update the prediction
+  //     prediction_global_prev_ = prediction_global_;
+  //     cv::circle(debug_map, person_image_coordinates, 8, 255);
+  //     cv::circle(debug_map, prediction_image_coordinates, 5, 255);
+  //   }
+  //   else
+  //   {
+  //     ROS_WARN("Destination close to obstacle, running the linear motion model on it");
+  //     std::cout << "prediction_image_coordinates: " << prediction_image_coordinates << std::endl;
+  //     // increasing the length
+  //     prediction_image_coordinates = new_prediction_image_coordinates;
+  //     std::cout << "new_prediction_image_coordinates: " << prediction_image_coordinates << std::endl;
       
-      cv::circle(debug_map, new_prediction_image_coordinates, 15, 255);
-      is_robot_to_prediction_feasible = false;
+  //     cv::circle(debug_map, new_prediction_image_coordinates, 15, 255);
+  //     is_robot_to_prediction_feasible = false;
     
-    }
-  }
+  //   }
+  // }
   
-  if (!is_robot_to_prediction_feasible)
+  // if (!is_robot_to_prediction_feasible)
   {
     
     cv::Point new_person_image_coordinates, new_prediction_image_coordinates;
