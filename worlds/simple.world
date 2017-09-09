@@ -9,7 +9,7 @@ include "sick.inc"
 # time to pause (in GUI mode) or quit (in headless mode (-g)) the simulation
 quit_time 3600 # 1 hour of simulated time
 
-paused 1
+paused 0
 
 resolution 0.02
 
@@ -30,7 +30,7 @@ floorplan
   name "cave"
   size [12.000 12.000 0.800]
   pose [0.000 0.000 0.000 0.000]
-  bitmap "bitmaps/lab4.pgm"
+  bitmap "bitmaps/eight.pgm"
 )
 
 pioneer2dx
@@ -38,7 +38,7 @@ pioneer2dx
   color "red"
   # can refer to the robot by this name
   name "r0"
-  pose [ 1.333 1.423 0.000 147.687 ] 
+  pose [ -0.660 0.886 0.000 147.989 ] 
 
   # pioneer2dx's sonars will be ranger:0 and the laser will be ranger:1
   sicklaser( pose [ 0.000 0.000 0.000 0.000 ] ) 
@@ -51,7 +51,7 @@ pioneer2dx
       colors [ "red" "blue" "green" "cyan" "yellow" "magenta" ]  
       alwayson 1
       update_interval 1
-      fov 70
+      fov 170
       range 30.0
       image [ 64 64 ]
       pan 0
@@ -77,7 +77,7 @@ fancypioneer2dx
   color "green"
   # can refer to the robot by this name
   name "r1"
-  pose [ 2.196 0.866 0.000 150.800 ] 
+  pose [ 0.716 0.714 0.000 150.800 ] 
 
   # pioneer2dx's sonars will be ranger:0 and the laser will be ranger:1
   sicklaser( pose [ 0.000 0.000 0.000 0.000 ] ) 

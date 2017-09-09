@@ -25,13 +25,13 @@
 		<param name="base_frame" value="$(arg base_frame)"/>
 		<param name="map_frame" value="$(arg map_frame)"/>
 	    <param name="map_update_interval" value="0.1"/>
-	    <param name="particles" value="20" />
-	    <param name="delta" value="0.05"/>
-	    <param name="maxRange" value="7"/>
-	    <param name="xmin" value="-15"/>
-	    <param name="ymin" value="-15"/>
-	    <param name="xmax" value="15"/>
-	    <param name="ymax" value="15"/>
+	    <param name="particles" value="40" />
+	    <param name="delta" value="0.02"/>
+	    <param name="maxRange" value="4"/>
+	    <param name="xmin" value="-12"/>
+	    <param name="ymin" value="-12"/>
+	    <param name="xmax" value="12"/>
+	    <param name="ymax" value="12"/>
 	    <rosparam command="load" file="$(find person_follower)/config_nav/mapper_params.yaml" />
 	</node>
 

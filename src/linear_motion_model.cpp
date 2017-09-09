@@ -56,7 +56,7 @@ void LinearMotionModel::getViablDirections(
     goal_point.x = std::max( std::min(goal_point.x, map.cols-1), 0);
     goal_point.y = std::max( std::min(goal_point.y, map.rows-1), 0);
 
-    std::cout << "Checking goal: " << goal_point << std::endl;
+    // std::cout << "Checking goal: " << goal_point << std::endl;
 
     cv::Point new_destination_point;
     cv::Mat debug_map;
@@ -795,8 +795,8 @@ int LinearMotionModel::chooseObstacleDirection(
       float total_cost[2] = {0, 0};
       float cost_weights[3] = {
         10, 
-        0, // 2, 
-        0, // 1
+        2, 
+        1
       };
   
       for (size_t i = 0; i < 2; i++)
@@ -811,17 +811,17 @@ int LinearMotionModel::chooseObstacleDirection(
         }
       }
   
-      // ROS_INFO(
-      //   "Wall1: %f, Opposite wall: %f",
-      //   ol_theta[0] * 180 / M_PI,
-      //   ol_theta[1] * 180 / M_PI
-      // );
-      // ROS_INFO("Winners: %d, %d, %d", cost_winners[0], cost_winners[1], cost_winners[2]);
-      // ROS_INFO(
-      //   "Cost[0]: %f, %f, %f, Cost[1]: %f, %f, %f", 
-      //   costs[0][0], costs[0][1], costs[0][2],
-      //   costs[1][0], costs[1][1], costs[1][2]
-      // );
+      ROS_INFO(
+        "Wall1: %f, Opposite wall: %f",
+        ol_theta[0] * 180 / M_PI,
+        ol_theta[1] * 180 / M_PI
+      );
+      ROS_INFO("Winners: %d, %d, %d", cost_winners[0], cost_winners[1], cost_winners[2]);
+      ROS_INFO(
+        "Cost[0]: %f, %f, %f, Cost[1]: %f, %f, %f", 
+        costs[0][0], costs[0][1], costs[0][2],
+        costs[1][0], costs[1][1], costs[1][2]
+      );
   
       // TODO: filter out any prediction that is going towards the object
       chosen_idx = (total_cost[1] < total_cost[0]) ? 1 : 0;
@@ -829,12 +829,12 @@ int LinearMotionModel::chooseObstacleDirection(
   }
   destination_point_out = destination_points[chosen_idx];
 
-  // ROS_INFO(
-  //   "Robot: %f, Chosen wall: %f, Opposite wall: %f",
-  //   RP_theta * 180 / M_PI,
-  //   ol_theta[chosen_idx] * 180 / M_PI,
-  //   ol_theta[1-chosen_idx] * 180 / M_PI
-  // );
+  ROS_INFO(
+    "Robot: %f, Chosen wall: %f, Opposite wall: %f",
+    RP_theta * 180 / M_PI,
+    ol_theta[chosen_idx] * 180 / M_PI,
+    ol_theta[1-chosen_idx] * 180 / M_PI
+  );
 
   return 0;
 }

@@ -8,6 +8,9 @@ DWAPlannerROS:
   max_vel_x: 10.5
   min_vel_x: 0.0
 
+  vx_samples: 16
+  vth_samples: 16
+
   # max_vel_y: 0.0
   # min_vel_y: 0.0
 

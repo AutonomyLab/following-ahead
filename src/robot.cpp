@@ -441,7 +441,7 @@ void Robot::odometryCallback(const boost::shared_ptr<const nav_msgs::Odometry>& 
 
 void Robot::spinOnce() try
 {
-  if (current_odometry_.twist.twist.linear.x < 0.1 && current_odometry_.twist.twist.angular.z > 0.15)
+  if (current_odometry_.twist.twist.angular.z > 0.15)
   {
     ROS_WARN("Pure rotation detection, not doing updates!!");
     return;
