@@ -99,7 +99,7 @@ Visualization Manager:
         base_link:
           Value: true
         camera:
-          Value: false
+          Value: true
         camera_depth_frame:
           Value: false
         camera_depth_optical_frame:
@@ -134,8 +134,16 @@ Visualization Manager:
           Value: false
         odom:
           Value: false
+        person_kalman:
+          Value: true
+        person_raw:
+          Value: true
+        prediction_kalman:
+          Value: true
         relative_pose:
-          Value: false
+          Value: true
+        updated_prediction:
+          Value: true
       Marker Scale: 3
       Name: TF
       Show Arrows: false
@@ -150,7 +158,15 @@ Visualization Manager:
               laser:
                 laser_back:
                   {}
+          person_kalman:
+            {}
+          person_raw:
+            {}
+          prediction_kalman:
+            {}
           relative_pose:
+            {}
+          updated_prediction:
             {}
       Update Interval: 0
       Value: true
@@ -324,7 +340,7 @@ Visualization Manager:
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
-    Fixed Frame: map
+    Fixed Frame: base_link
     Frame Rate: 30
   Name: root
   Tools:
@@ -345,24 +361,24 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 24.5296497
+      Distance: 22.4815903
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.0599999987
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 2.09950066
-        Y: 2.1843791
-        Z: -6.13552618
+        X: 2.03071642
+        Y: -0.0556533709
+        Z: -5.96225548
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.0500000007
       Name: Current View
       Near Clip Distance: 0.00999999978
-      Pitch: 1.43479657
+      Pitch: 1.51479638
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 6.15948248
+      Yaw: 3.11629248
     Saved: ~
 Window Geometry:
   Displays:

@@ -3,9 +3,9 @@
   <node ns="local_costmap" name="voxel_grid_throttle" pkg="topic_tools" type="throttle" args="messages voxel_grid 3.0 voxel_grid_throttled" />
 
   <node pkg="move_base" type="move_base" respawn="false" name="move_base_node" output="screen">
-    <param name="footprint_padding" value="0.05" />
+    <!-- <param name="footprint_padding" value="0.05" /> -->
     <param name="controller_frequency" value="20.0" />
-    <param name="controller_patience" value="15.0" />
+    <param name="controller_patience" value="2.0" />
     <param name="recovery_behavior_enabled" value="true" />
     <remap from="/cmd_vel" to="/move_base/cmd_vel" />
 

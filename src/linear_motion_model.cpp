@@ -749,63 +749,89 @@ int LinearMotionModel::chooseObstacleDirection(
     else
     {
       float object2destinations_distance[2];
+      float previous2currentdestinations_distance[2];
+      float angles_to_original_vector[2];
       for (size_t i = 0; i < 2; i++)
       {
         object2destinations_distance[i] = sqrt(
           pow(destination_points[i].x - current_object_point_.x, 2) +
           pow(destination_points[i].y - current_object_point_.y, 2)
         ) * map_resolution;
-      }
-  
-      float previous2currentdestinations_distance[2];
-      for (size_t i = 0; i < 2; i++)
-      {
+      
         previous2currentdestinations_distance[i] = sqrt(
           pow(destination_points[i].x - previous_destination_point_.x, 2) +
           pow(destination_points[i].y - previous_destination_point_.y, 2)
         ) * map_resolution;
+
+        // the direction of vector of the candidate object to destination should be along the same direction as the original object to destination
+        angles_to_original_vector[i] = vectorAngle(
+          cv::Point2f(
+            current_destination_point_.x - current_object_point_.x,
+            current_destination_point_.y - current_object_point_.y
+          ),
+
+          cv::Point2f(
+            destination_points[i].x - object_point_out.x,
+            destination_points[i].y - object_point_out.y
+          )
+        );
+
       }
   
       // all three costs for the two directions
-      float costs[2][3];
+      #define NUM_COSTS 4
+      float costs[2][NUM_COSTS];
       for (size_t i = 0; i < 2; i++)
       {
         costs[i][0] = fabs(angle_object_wall[i]) / M_PI;
         costs[i][1] = previous2currentdestinations_distance[i] / PREDICTION_LOOKAHEAD_DISTANCE;
         costs[i][2] = 1.0/(1.0 + (object2destinations_distance[i] / PREDICTION_LOOKAHEAD_DISTANCE)) * 2.0;
+        costs[i][3] = angles_to_original_vector[i] / M_PI;
       }
   
       // winners for the three costs
-      int cost_winners[3];
-      for (size_t j = 0; j < 3; j++)
-      if ( fabs(costs[0][j] - costs[1][j]) < NORMALIZED_COST_THRESHOLD)
+      int cost_winners[NUM_COSTS];
+      for (size_t j = 0; j < NUM_COSTS; j++)
       {
-        // there is no clear winner
-        cost_winners[j] = 0;
+        if ( fabs(costs[0][j] - costs[1][j]) < NORMALIZED_COST_THRESHOLD)
+        {
+          // there is no clear winner
+          cost_winners[j] = 0;
+        }
+        else
+        {
+          cost_winners[j] = costs[1][j] < costs[0][j] 
+                            ? 1 
+                            : -1;  
+        }
       }
-      else
-      {
-        cost_winners[j] = costs[1][j] < costs[0][j] 
-                          ? 1 
-                          : -1;  
-      }
-  
-      object2destinations_distance[1] > object2destinations_distance[0] ? 1 : 0;
   
       float total_cost[2] = {0, 0};
-      float cost_weights[3] = {
+      float cost_weights[NUM_COSTS] = {
         10, 
-        2, 
-        1
+        2, // 2, 
+        0, // 1,
+        3
       };
   
       for (size_t i = 0; i < 2; i++)
       {
-        for (size_t j = 0; j < 3; j++)
+        for (size_t j = 0; j < NUM_COSTS; j++)
         {
-          if (cost_winners[j])
+          if (j == 0)
+          {
+            if (cost_winners[0])
+            {
+              // we have a clear winner (the cost wasn't similar)
+              total_cost[i] += cost_weights[j] * costs[i][j];
+            }
+          }
+          else if (
+                    cost_winners[j] && cost_weights[j]
+                  )
           {
             // we have a clear winner (the cost wasn't similar)
+            ROS_ERROR("Using cost %d to break tie", j);
             total_cost[i] += cost_weights[j] * costs[i][j];
           }
         }
@@ -816,11 +842,11 @@ int LinearMotionModel::chooseObstacleDirection(
         ol_theta[0] * 180 / M_PI,
         ol_theta[1] * 180 / M_PI
       );
-      ROS_INFO("Winners: %d, %d, %d", cost_winners[0], cost_winners[1], cost_winners[2]);
+      ROS_INFO("Winners: %d, %d, %d, %d", cost_winners[0], cost_winners[1], cost_winners[2], cost_winners[3]);
       ROS_INFO(
-        "Cost[0]: %f, %f, %f, Cost[1]: %f, %f, %f", 
-        costs[0][0], costs[0][1], costs[0][2],
-        costs[1][0], costs[1][1], costs[1][2]
+        "Cost[0]: %f, %f, %f, %f, Cost[1]: %f, %f, %f, %f", 
+        costs[0][0], costs[0][1], costs[0][2], costs[0][3],
+        costs[1][0], costs[1][1], costs[1][2], costs[1][3]
       );
   
       // TODO: filter out any prediction that is going towards the object

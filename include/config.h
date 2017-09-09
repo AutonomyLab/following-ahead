@@ -3,7 +3,7 @@
 
 #include <cmath>
 
-#define DISTANCE_EPSILON 0.05
+#define DISTANCE_EPSILON 0.10
 #define VELOCITY_ERROR_EPSILON 1.0
 #define POSITION_ERROR_EPSILON 1.0
 #define ORIENTATION_ERROR_EPSILON 1.0
@@ -54,7 +54,7 @@
 // Infinite impulse response (IIR) filter for velocity and orientation
 // higher these values, more importance to the new readings
 #define VEL_IIR_ALPHA 0.3
-#define THETA_IIR_ALPHA 0.7 // 0.01
+#define THETA_IIR_ALPHA 0.4 // 0.01
 
 // process noise during the prediction step of EKF
 #define X_T_PROCESS_NOISE_VAR 0.01
@@ -86,7 +86,7 @@
 #define ROBOT_VELOCITY_VARIANCE_SCALING 0.5
 
 // lookahead distance (m) for prediction
-#define PREDICTION_LOOKAHEAD_DISTANCE 3.5 //4
+#define PREDICTION_LOOKAHEAD_DISTANCE 2.7 //4
 
 #define MINIMUM_DISTANCE_BETWEEN_OBSTACLES 0.7
 
@@ -102,7 +102,7 @@
 #define OCCUPANCY_THRESHOLD 70
 #define OBSTACLE_RAYCASTING_PERTURBATION 5
 // distance to maintain from the obstacles (for the motion model)
-#define OBSTACLE_CLEARANCE_DISTANCE 0.8 // 1.5
+#define OBSTACLE_CLEARANCE_DISTANCE 1.0 // 1.5
 // the normalized cost difference below this will count as a draw
 #define NORMALIZED_COST_THRESHOLD 0.04
 // dilation to inflate obstacles in map (in meters)
@@ -114,7 +114,7 @@
 #define WAYPOINT_LOOP_LIMIT 5
 #define PERSON_LOST_TIMEOUT 2
 
-#define PERSON_ORIENTATION_FILTER_SIZE 7
+#define PERSON_ORIENTATION_FILTER_SIZE 17
 
 // distance to lookahead to see if there are deadends
 #define DEADEND_LOOKAHEAD_DISTANCE 0.50

@@ -13,7 +13,7 @@ raytrace_range: 5.0
 footprint: [[-0.2, -0.2], [-0.2, 0.2], [0.2, 0.2], [0.2, -0.2]]
 #robot_radius: 0.46
 footprint_padding: 0.001
-inflation_radius: 0.01
+inflation_radius: 0.05
 cost_scaling_factor: 10.0
 lethal_cost_threshold: 10
 unknown_cost_value: 255

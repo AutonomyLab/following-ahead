@@ -22,6 +22,14 @@ float rotationMatrix2Theta(cv::Mat rotation_matrix)
   );
 }
 
+float vectorAngle(cv::Point2f vector1, cv::Point2f vector2)
+{
+  vector1 /= norm(vector1);
+  vector2 /= norm(vector2);
+
+  return acos(vector1.dot(vector2));
+}
+
 cv::Mat xytheta2TransformationMatrix(cv::Mat xytheta)
 {
   float x = xytheta.at<float>(0, 0);
