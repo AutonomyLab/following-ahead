@@ -1,5 +1,8 @@
 <launch>
 	<arg name="output_file" default="follower" />
 	<arg name="topics" default="/tf /map /visualization_marker /person_follower/groundtruth_pose /odom /clock /map_metadata /map_updates /move_base_node/GlobalPlanner/plan" />
-	<node pkg="rosbag" type="record" name="rosbag_recorder" output="screen" args="$(arg topics) -o /home/payam/ros_project/src/person_follower/bag/$(arg output_file)"/>
+
+	<arg name="exclude" default="/camera(.*)|(.*)map_image(.*)|(.*)debug_image(.*)" />
+	<!-- <node pkg="rosbag" type="record" name="rosbag_recorder" output="screen" args="$(arg topics) -o /home/payam/ros_project/src/person_follower/bag/$(arg output_file)"/> -->
+	<node pkg="rosbag" type="record" name="rosbag_recorder" output="screen" args="-x $(arg exclude) -o /home/payam/ros_project/src/person_follower/bag/$(arg output_file)"/>
 </launch>

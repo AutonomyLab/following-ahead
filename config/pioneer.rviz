@@ -20,7 +20,7 @@ Panels:
         - /Image1
         - /Path1
       Splitter Ratio: 0.443535179
-    Tree Height: 355
+    Tree Height: 359
   - Class: rviz/Selection
     Name: Selection
   - Class: rviz/Tool Properties
@@ -134,8 +134,10 @@ Visualization Manager:
           Value: false
         odom:
           Value: false
+        person_raw:
+          Value: true
         relative_pose:
-          Value: false
+          Value: true
       Marker Scale: 3
       Name: TF
       Show Arrows: false
@@ -150,6 +152,8 @@ Visualization Manager:
               laser:
                 laser_back:
                   {}
+          person_raw:
+            {}
           relative_pose:
             {}
       Update Interval: 0
@@ -302,7 +306,7 @@ Visualization Manager:
       Buffer Length: 1
       Class: rviz/Path
       Color: 255; 0; 0
-      Enabled: false
+      Enabled: true
       Head Diameter: 0.0900000036
       Head Length: 0.0500000007
       Length: 0.300000012
@@ -320,7 +324,7 @@ Visualization Manager:
       Shaft Length: 0.00100000005
       Topic: /move_base_node/GlobalPlanner/plan
       Unreliable: false
-      Value: false
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
@@ -345,24 +349,24 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 24.5296497
+      Distance: 29.0371914
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.0599999987
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 2.09950066
-        Y: 2.1843791
-        Z: -6.13552618
+        X: 1.42833424
+        Y: 3.87261009
+        Z: -6.0732069
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.0500000007
       Name: Current View
       Near Clip Distance: 0.00999999978
-      Pitch: 1.43479657
+      Pitch: 1.56479633
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 6.15948248
+      Yaw: 6.27948189
     Saved: ~
 Window Geometry:
   Displays:

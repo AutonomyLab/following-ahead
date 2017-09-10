@@ -10,9 +10,9 @@ transform_tolerance: 0.3 #1.0
 obstacle_range: 2.5
 max_obstacle_height: 2.0
 raytrace_range: 5.0
-footprint: [[-0.2, -0.2], [-0.2, 0.2], [0.2, 0.2], [0.2, -0.2]]
+footprint: [[-0.3, -0.3], [-0.3, 0.3], [0.3, 0.3], [0.3, -0.3]]
 #robot_radius: 0.46
-footprint_padding: 0.001
+footprint_padding: 0.002
 inflation_radius: 0.01
 cost_scaling_factor: 10.0
 lethal_cost_threshold: 10
