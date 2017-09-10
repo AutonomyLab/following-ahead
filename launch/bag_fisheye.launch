@@ -1,5 +1,5 @@
 <launch>
-	<arg name="output_file" default="follower" />
+	<arg name="output_file" default="vicon_follower" />
 	<arg name="topics" default="/tf /map /visualization_marker /person_follower/groundtruth_pose /odom /clock /map_metadata /map_updates /move_base_node/GlobalPlanner/plan" />
 
 	<arg name="exclude" default="/camera(.*)|(.*)map_image(.*)|(.*)debug_image(.*)" />

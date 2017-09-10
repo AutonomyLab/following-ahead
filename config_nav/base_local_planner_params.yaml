@@ -1,7 +1,7 @@
 TrajectoryPlannerROS:
   #Independent settings for the local costmap
   transform_tolerance: 0.3
-  sim_time: 1.7
+  sim_time: 1.9
   sim_granularity: 0.025
   dwa: false
   vx_samples: 3
@@ -14,8 +14,8 @@ TrajectoryPlannerROS:
   yaw_goal_tolerance: 0.05
   # goal_distance_bias: 0.8
   # path_distance_bias: 0.6
-  occdist_scale: 0.7
-  heading_lookahead: 0.325
+  occdist_scale: 0.02
+  heading_lookahead: 0.7
   oscillation_reset_dist: 0.05
   holonomic_robot: false #true
   acc_lim_th: 2.0 # 3.2

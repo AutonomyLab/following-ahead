@@ -19,6 +19,8 @@
 	
 	<node pkg="tf" type="static_transform_publisher" name="static_transform_publisher" args="0.11 0 0.220 0 0 0 $(arg base_frame) $(arg laser_frame) 50"/>
 
+	<include file="$(find vicon_bridge)/launch/vicon.launch" />
+
 	<node pkg="gmapping" type="slam_gmapping" name="slam_gmapping" output="screen">
 		<param name="odom_frame" value="odom"/>
 		<!-- <param name="odom_frame" value="odom_combined"/> -->

@@ -135,9 +135,9 @@ Visualization Manager:
         odom:
           Value: false
         person_raw:
-          Value: true
+          Value: false
         relative_pose:
-          Value: true
+          Value: false
       Marker Scale: 3
       Name: TF
       Show Arrows: false
@@ -356,17 +356,17 @@ Visualization Manager:
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 1.42833424
-        Y: 3.87261009
-        Z: -6.0732069
+        X: 1.50746739
+        Y: 2.91077781
+        Z: -6.16613436
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.0500000007
       Name: Current View
       Near Clip Distance: 0.00999999978
-      Pitch: 1.56479633
+      Pitch: 1.47479641
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 6.27948189
+      Yaw: 4.79447699
     Saved: ~
 Window Geometry:
   Displays:

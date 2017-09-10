@@ -6,11 +6,11 @@ z_voxels: 10
 unknown_threshold: 9
 mark_threshold: 1                       
 #END VOXEL STUFF
-transform_tolerance: 0.3 #1.0 
+transform_tolerance: 1.0 # 0.3 
 obstacle_range: 2.5
 max_obstacle_height: 2.0
 raytrace_range: 5.0
-footprint: [[-0.3, -0.3], [-0.3, 0.3], [0.3, 0.3], [0.3, -0.3]]
+footprint: [[-0.25, -0.25], [-0.25, 0.25], [0.25, 0.25], [0.25, -0.25]]
 #robot_radius: 0.46
 footprint_padding: 0.002
 inflation_radius: 0.01

@@ -54,7 +54,7 @@
 // Infinite impulse response (IIR) filter for velocity and orientation
 // higher these values, more importance to the new readings
 #define VEL_IIR_ALPHA 0.3
-#define THETA_IIR_ALPHA 0.7 // 0.01
+#define THETA_IIR_ALPHA 0.85 // 0.7 
 
 // process noise during the prediction step of EKF
 #define X_T_PROCESS_NOISE_VAR 0.01
@@ -86,7 +86,7 @@
 #define ROBOT_VELOCITY_VARIANCE_SCALING 0.5
 
 // lookahead distance (m) for prediction
-#define PREDICTION_LOOKAHEAD_DISTANCE 2.7 //4
+#define PREDICTION_LOOKAHEAD_DISTANCE 2.5 //4
 
 #define MINIMUM_DISTANCE_BETWEEN_OBSTACLES 0.7
 
@@ -106,15 +106,15 @@
 // the normalized cost difference below this will count as a draw
 #define NORMALIZED_COST_THRESHOLD 0.04
 // dilation to inflate obstacles in map (in meters)
-#define OBSTACLE_INFLATION 0.6
+#define OBSTACLE_INFLATION 1.0 // 0.6
 #define DESTINATION_EXTENTION_PERCENTAGE 1.2
 
 // distance to obstacle that is considered feasible for destination
-#define FEASIBLE_DESTINATION_TO_OBSTACLE_DISTANCE 1.0
+#define FEASIBLE_DESTINATION_TO_OBSTACLE_DISTANCE 0.7
 #define WAYPOINT_LOOP_LIMIT 5
 #define PERSON_LOST_TIMEOUT 2
 
-#define PERSON_ORIENTATION_FILTER_SIZE 7
+#define PERSON_ORIENTATION_FILTER_SIZE 4
 
 // distance to lookahead to see if there are deadends
 #define DEADEND_LOOKAHEAD_DISTANCE 0.50

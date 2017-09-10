@@ -16,6 +16,8 @@
 
 	<node pkg="tf" type="static_transform_publisher" name="static_transform_publisher2" args="-0.10 -0.05 0.195 3.141592653589793 0 0 $(arg laser_frame) $(arg laser_frame_back) 50"/>
 
+	<include file="$(find vicon_bridge)/launch/vicon.launch" />
+
 	<!-- <node pkg="person_follower" type="relative_kinect_publisher.py" name="relative_kinect_publisher" />  -->
 
 	<node pkg="gmapping" type="slam_gmapping" name="slam_gmapping" output="screen">
