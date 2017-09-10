@@ -81,29 +81,48 @@ class Processor:
         ax.set_xlabel("y [m]")
 
     def showCorrespondingPoint(self):
+        skip = 40 # 80
+        
         # size of image meters
-        metric_size = 8.0
-        image_size = 600
-        skip = 80
-        img = np.ones((image_size, image_size, 3), dtype=np.uint8)
-        img *= 255
+        # metric_size = 9.0
+        # image_size = 600
+        # img = np.ones((image_size, image_size, 3), dtype=np.uint8)
+        # img *= 255
+
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        ax.hold(True)
+        ax.grid(True)
 
         for i in range(0, len(self.robot_positions), skip):
-
-            robot_image_coords = (
-                int(round( image_size/2.0 + self.robot_positions[i][0] * image_size / metric_size )),
-                int(round( image_size/2.0 + self.robot_positions[i][1] * image_size / metric_size ))
-            )
             
-            person_image_coords = (
-                int(round( image_size/2.0 + self.person_positions[i][0] * image_size / metric_size )),
-                int(round( image_size/2.0 + self.person_positions[i][1] * image_size / metric_size ))
+            ax.plot(
+                [self.robot_positions[i][0], self.person_positions[i][0]], [self.robot_positions[i][1], self.person_positions[i][1]], 'c'
             )
 
-            cv2.circle(img, robot_image_coords, 4, (255, 0, 0), -1)
-            cv2.circle(img, person_image_coords, 4, (255, 255, 0), -1)
-            cv2.line(img, robot_image_coords, person_image_coords, (255, 0, 255), 1)
-        cv2.imshow("window", img)
+            ax.plot([self.robot_positions[i][0]], [self.robot_positions[i][1]], 'ro')
+            ax.plot([self.person_positions[i][0]], [self.person_positions[i][1]], 'b^')
+
+            # robot_image_coords = (
+            #     int(round( image_size/2.0 + self.robot_positions[i][0] * image_size / metric_size )),
+            #     int(round( image_size/2.0 + self.robot_positions[i][1] * image_size / metric_size ))
+            # )
+            
+            # person_image_coords = (
+            #     int(round( image_size/2.0 + self.person_positions[i][0] * image_size / metric_size )),
+            #     int(round( image_size/2.0 + self.person_positions[i][1] * image_size / metric_size ))
+            # )
+
+            # cv2.circle(img, robot_image_coords, 4, (255, 0, 0), -1)
+            # cv2.rectangle(
+            #     img, 
+            #     (person_image_coords[0]-3, person_image_coords[0]-3), 
+            #     (person_image_coords[0]+3, person_image_coords[0]+3), 
+            #     (255, 255, 0), 
+            #     -1
+            # )
+            # cv2.line(img, robot_image_coords, person_image_coords, (255, 0, 255), 1)
+        # cv2.imshow("window", img)
 
 if __name__ == "__main__":
     processor = Processor()
