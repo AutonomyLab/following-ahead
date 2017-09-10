@@ -55,6 +55,9 @@ class Processor:
 
     def plot(self):
         plt.plot(self.timestamps, self.range_data)
+        plt.xlabel("time [sec]")
+        plt.ylabel("range [m]")
+
         self.showTrajectory()
         self.showCorrespondingPoint()
         cv2.waitKey(0)
@@ -78,7 +81,7 @@ class Processor:
         
         ax.legend()
         ax.set_xlabel("x [m]")
-        ax.set_xlabel("y [m]")
+        ax.set_ylabel("y [m]")
 
     def showCorrespondingPoint(self):
         skip = 40 # 80
@@ -100,8 +103,12 @@ class Processor:
                 [self.robot_positions[i][0], self.person_positions[i][0]], [self.robot_positions[i][1], self.person_positions[i][1]], 'c'
             )
 
-            ax.plot([self.robot_positions[i][0]], [self.robot_positions[i][1]], 'ro')
-            ax.plot([self.person_positions[i][0]], [self.person_positions[i][1]], 'b^')
+            if i == 0:
+                ax.plot([self.robot_positions[i][0]], [self.robot_positions[i][1]], 'ro', label="robot trajectory")
+                ax.plot([self.person_positions[i][0]], [self.person_positions[i][1]], 'b^', label="person trajectory")
+            else:
+                ax.plot([self.robot_positions[i][0]], [self.robot_positions[i][1]], 'ro')
+                ax.plot([self.person_positions[i][0]], [self.person_positions[i][1]], 'b^')
 
             # robot_image_coords = (
             #     int(round( image_size/2.0 + self.robot_positions[i][0] * image_size / metric_size )),
@@ -122,7 +129,11 @@ class Processor:
             #     -1
             # )
             # cv2.line(img, robot_image_coords, person_image_coords, (255, 0, 255), 1)
+        
         # cv2.imshow("window", img)
+        ax.legend()
+        ax.set_xlabel("x [m]")
+        ax.set_ylabel("y [m]")
 
 if __name__ == "__main__":
     processor = Processor()

@@ -39,8 +39,14 @@ class RangeBearingProcessor:
 
     def plot(self):
         plt.plot(self.timestamps, self.bearing_data)
+        plt.xlabel("time [sec]")
+        plt.ylabel("bearing [degree]")
+        
         plt.figure()
         plt.plot(self.timestamps, self.range_data)
+        plt.xlabel("time [sec]")
+        plt.ylabel("range [m]")
+
         plt.show()
 
 
