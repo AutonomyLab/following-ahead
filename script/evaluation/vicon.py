@@ -5,9 +5,13 @@ import message_filters
 from geometry_msgs.msg import TransformStamped, PointStamped
 import tf
 from math import sqrt
+import matplotlib
 import matplotlib.pyplot as plt
 import cv2
 import numpy as np
+
+PLOT_AXIS_FONT = 130
+TRAJECTORY_AXIS_FONT = 45
 
 class Processor:
     def __init__(self):
@@ -28,9 +32,16 @@ class Processor:
 
     def getPersonCorrected(self, person_transform):
         person_point = PointStamped()
-        person_point.point.x = 0
-        person_point.point.y = 0.5
+        ## square
+        # person_point.point.x = 0
+        # person_point.point.y = 0.5
+        # person_point.point.z = 0
+
+        ## eight-1
+        person_point.point.x = 0.5
+        person_point.point.y = 0
         person_point.point.z = 0
+
         person_point.header.stamp = person_transform.header.stamp
         person_point.header.frame_id = person_transform.child_frame_id
 
@@ -68,11 +79,36 @@ class Processor:
             )
 
     def plot(self):
+        font = {
+            'family' : 'Times',
+            'weight' : 'bold',
+            'size'   : PLOT_AXIS_FONT,
+        }
+
+        axes = {
+            'unicode_minus' : False
+        }
+
+        matplotlib.rc('font', **font)
+        matplotlib.rc('axes', **axes)
         plt.plot(self.timestamps, self.range_data)
+        plt.yticks(np.arange(.2, 2, .4))
         plt.xlabel("time [sec]")
         plt.ylabel("range [m]")
 
-        self.showTrajectory()
+        font = {
+            'family' : 'Times',
+            'weight' : 'bold',
+            'size'   : TRAJECTORY_AXIS_FONT,
+        }
+
+        axes = {
+            'unicode_minus' : False
+        }
+
+        matplotlib.rc('font', **font)
+        matplotlib.rc('axes', **axes)
+        # self.showTrajectory()
         self.showCorrespondingPoint()
         cv2.waitKey(0)
         plt.show()
@@ -116,13 +152,26 @@ class Processor:
             ax.plot(
                 [self.robot_positions[i][0], self.person_positions[i][0]], [self.robot_positions[i][1], self.person_positions[i][1]], 'c'
             )
+            
+            markersize = 12
+            markercolor_robot = 'r'
+            markercolor_person = 'b'
+            
+            if i == 0:
+                markersize = 20
+                markercolor_robot = (1.0, 0.5, 0)
+                markercolor_person = (0, 0.5, 1.0)
+            elif (len(self.robot_positions) - i) < skip :
+                markersize = 20
+                markercolor_robot = (1.0, 1.0, 0)
+                markercolor_person = (0, 1.0, 1.0)
 
             if i == 0:
-                ax.plot([self.robot_positions[i][0]], [self.robot_positions[i][1]], 'ro', label="robot trajectory")
-                ax.plot([self.person_positions[i][0]], [self.person_positions[i][1]], 'b^', label="person trajectory")
+                ax.plot([self.robot_positions[i][0]], [self.robot_positions[i][1]], color=markercolor_robot, markersize=markersize, marker='o', label="robot trajectory")
+                ax.plot([self.person_positions[i][0]], [self.person_positions[i][1]], color=markercolor_person, markersize=markersize, marker='^', label="person trajectory")
             else:
-                ax.plot([self.robot_positions[i][0]], [self.robot_positions[i][1]], 'ro')
-                ax.plot([self.person_positions[i][0]], [self.person_positions[i][1]], 'b^')
+                ax.plot([self.robot_positions[i][0]], [self.robot_positions[i][1]], color=markercolor_robot, markersize=markersize, marker='o', )
+                ax.plot([self.person_positions[i][0]], [self.person_positions[i][1]], color=markercolor_person, markersize=markersize, marker='^', )
 
             # robot_image_coords = (
             #     int(round( image_size/2.0 + self.robot_positions[i][0] * image_size / metric_size )),
@@ -145,7 +194,8 @@ class Processor:
             # cv2.line(img, robot_image_coords, person_image_coords, (255, 0, 255), 1)
         
         # cv2.imshow("window", img)
-        ax.legend()
+        # ax.legend(bbox_to_anchor=(1.1, 1.1))
+        ax.set_aspect('equal', 'datalim')
         ax.set_xlabel("x [m]")
         ax.set_ylabel("y [m]")
 
