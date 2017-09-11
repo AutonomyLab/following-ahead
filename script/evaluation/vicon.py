@@ -2,7 +2,7 @@
 
 import rospy
 import message_filters
-from geometry_msgs.msg import TransformStamped
+from geometry_msgs.msg import TransformStamped, PointStamped
 import tf
 from math import sqrt
 import matplotlib.pyplot as plt
@@ -26,6 +26,20 @@ class Processor:
         self.timestamps = []
         self.start_time_offset = 0.0
 
+    def getPersonCorrected(self, person_transform):
+        person_point = PointStamped()
+        person_point.point.x = 0
+        person_point.point.y = 0.5
+        person_point.point.z = 0
+        person_point.header.stamp = person_transform.header.stamp
+        person_point.header.frame_id = person_transform.child_frame_id
+
+        person_point_corrected = self.tf_transformer.transformPoint(person_transform.header.frame_id, person_point)
+        return (
+            person_point_corrected.point.x,
+            person_point_corrected.point.y,
+            person_point_corrected.point.x
+        )
 
     def viconCallback(self, robot_transform, person_transform):
         self.tf_transformer.setTransform(robot_transform)
@@ -50,7 +64,7 @@ class Processor:
                 (robot_transform.transform.translation.x, robot_transform.transform.translation.y)
             )
             self.person_positions.append(
-                (person_transform.transform.translation.x, person_transform.transform.translation.y)
+                self.getPersonCorrected(person_transform) # (person_transform.transform.translation.x, person_transform.transform.translation.y)
             )
 
     def plot(self):
