@@ -161,7 +161,7 @@ class Processor:
                 markersize = 20
                 markercolor_robot = (1.0, 0.5, 0)
                 markercolor_person = (0, 0.5, 1.0)
-            elif (len(self.robot_positions) - i) < skip :
+            elif (len(self.robot_positions) - i) < skip:
                 markersize = 20
                 markercolor_robot = (1.0, 1.0, 0)
                 markercolor_person = (0, 1.0, 1.0)
