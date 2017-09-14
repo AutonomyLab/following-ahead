@@ -4,7 +4,9 @@ import rospy
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
+from math import sqrt
 import sys
+import collections
 
 # python script/evaluation/plot_data.py square 60 35 13 90
 # python script/evaluation/plot_data.py eight 36 65 18 78
@@ -15,6 +17,63 @@ data saved in the format
     timestamp, range, robot_x, robot_y, person_x, person_y
     timestamp, bearing
 '''
+def L2(a, b):
+    return sqrt( \
+                    (a[0] - b[0])**2 + \
+                    (a[1] - b[1])**2 \
+                )
+
+def lowPassFilter(data):
+    DISTANCE_FILTER = 0.01
+    FIR_SIZE = 50
+    queue = collections.deque(maxlen=FIR_SIZE)
+    filtered_data = []
+
+    
+    for data_idx in range(data.shape[0]):
+        is_okay = True
+        if data_idx:
+            # check with previous one for decrepancy
+            if  L2(data[data_idx, 2:4], data[data_idx-1, 2:4]) > DISTANCE_FILTER or \
+                L2(data[data_idx, 4:6], data[data_idx-1, 4:6]) > DISTANCE_FILTER:
+                is_okay = False
+
+        if is_okay:
+            queue.append(data[data_idx, 2:6])
+            if len(queue) == FIR_SIZE:
+                total = reduce(lambda x, y: [x[i]+y[i] for i in range(len(x))], queue, [0 for i in range(4)])
+                average = [i / len(queue) for i in total]
+                filtered_data.append(
+                    [data[data_idx, 0], data[data_idx, 1]] + average
+                )
+            else:
+                filtered_data.append(data[data_idx, :])
+            
+    return np.asarray(filtered_data)
+
+
+def showTrajectory(data):
+    data = lowPassFilter(data)
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+
+    ax.plot( 
+        data[:, 2], 
+        data[:, 3], 
+        label="robot trajectory",
+        color = 'b'
+    )
+    ax.plot( 
+        data[:, 4], 
+        data[:, 5], 
+        label="person trajectory",
+        color = 'r'
+    )
+    
+    # ax.legend()
+    ax.set_xlabel("x [m]")
+    ax.set_ylabel("y [m]")
+
 def showCorrespondingPoint(data, ax):
     font = {
         'family' : 'Times',
@@ -38,8 +97,8 @@ def showCorrespondingPoint(data, ax):
         )
         
         markersize = 13
-        markercolor_robot = 'r'
-        markercolor_person = 'b'
+        markercolor_robot = 'b'
+        markercolor_person = 'r'
         
         # if i == 0:
         #     markersize = 20
@@ -82,7 +141,7 @@ def showBearing(data, ax, start_time):
     ax.plot(data[:, 0]-start_time, bearings)
     ax.set_yticks(np.arange(-50, 100, 120))
     ax.set_xlabel("time [sec]")
-    ax.set_ylabel("deg")
+    ax.set_ylabel("degree")
     
 def showRange(data, ax, start_time):
     font = {
@@ -139,10 +198,15 @@ if __name__ == '__main__':
     print trajectory_data.shape
     print bearing_data.shape
 
+    showTrajectory(range_data)
+    plt.show()
+    exit(0)
+    plt.figure()
+
     axes = []
-    axes.append(plt.subplot2grid((21, 1), (0, 0), rowspan=15))
-    axes.append(plt.subplot2grid((21, 1), (17, 0)))
-    axes.append(plt.subplot2grid((21, 1), (19, 0), sharex=axes[1]))
+    axes.append(plt.subplot2grid((22, 1), (0, 0), rowspan=15))
+    axes.append(plt.subplot2grid((22, 1), (17, 0), rowspan=2))
+    axes.append(plt.subplot2grid((22, 1), (20, 0), rowspan=2, sharex=axes[1]))
     for i in range(len(axes)):
         axes[i].hold(True)
         axes[i].grid(True)
