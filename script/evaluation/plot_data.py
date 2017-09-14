@@ -11,6 +11,7 @@ import collections
 # python script/evaluation/plot_data.py square 60 35 13 90
 # python script/evaluation/plot_data.py eight 36 65 18 78
 
+matplotlib.rcParams['figure.figsize'] = (18, 13.5)
 FONT_SIZE = 30
 '''
 data saved in the format 
@@ -61,13 +62,15 @@ def showTrajectory(data):
         data[:, 2], 
         data[:, 3], 
         label="robot trajectory",
-        color = 'b'
+        color = 'r',
+        linewidth=3
     )
     ax.plot( 
         data[:, 4], 
         data[:, 5], 
         label="person trajectory",
-        color = 'r'
+        color = 'b',
+        linewidth=3
     )
     
     # ax.legend()
@@ -96,9 +99,9 @@ def showCorrespondingPoint(data, ax):
             [robot_x, person_x], [robot_y, person_y], c='c', linewidth=2.5
         )
         
-        markersize = 13
-        markercolor_robot = 'b'
-        markercolor_person = 'r'
+        markersize = 20
+        markercolor_robot = 'r'
+        markercolor_person = 'b'
         
         # if i == 0:
         #     markersize = 20
@@ -110,13 +113,13 @@ def showCorrespondingPoint(data, ax):
         #     markercolor_person = (0, 1.0, 1.0)
 
         if i == 0:
-            ax.plot([robot_x], [robot_y], color=markercolor_robot, markersize=markersize, marker='o', label="robot")
-            ax.plot([person_x], [person_y], color=markercolor_person, markersize=markersize, marker='*', label="person")
+            ax.plot([robot_x], [robot_y], color=markercolor_robot, markersize=markersize, marker='o', label="robot", linestyle="None")
+            ax.plot([person_x], [person_y], color=markercolor_person, markersize=markersize, marker='*', label="person", linestyle="None")
         else:
-            ax.plot([robot_x], [robot_y], color=markercolor_robot, markersize=markersize, marker='o', )
-            ax.plot([person_x], [person_y], color=markercolor_person, markersize=markersize, marker='*', )
+            ax.plot([robot_x], [robot_y], color=markercolor_robot, markersize=markersize, marker='o', linestyle="None")
+            ax.plot([person_x], [person_y], color=markercolor_person, markersize=markersize, marker='*', linestyle="None")
 
-    ax.legend(bbox_to_anchor=(1.2, 1.1))
+    ax.legend(bbox_to_anchor=(1.2, 1.1), numpoints=1)
     ax.set_xlim(-4, 4)
     ax.set_xlim(-4, 4)
     ax.set_aspect('equal', adjustable='box')#, 'datalim')
@@ -140,6 +143,7 @@ def showBearing(data, ax, start_time):
     bearings = map(lambda x: x if x>-50 else -50, data[:, 1])
     ax.plot(data[:, 0]-start_time, bearings)
     ax.set_yticks(np.arange(-50, 100, 120))
+    ax.set_xticks(range(0, 90, 10))
     ax.set_xlabel("time [sec]")
     ax.set_ylabel("degree")
     
@@ -157,6 +161,7 @@ def showRange(data, ax, start_time):
     
     ax.plot(data[:, 0]-start_time, data[:, 1])
     ax.set_yticks(np.arange(.2, 2.2, 1.8))
+    ax.set_xticks(range(0, 90, 10))
     # ax.set_xlabel("time [sec]")
     ax.set_ylabel("m")
     
@@ -198,10 +203,10 @@ if __name__ == '__main__':
     print trajectory_data.shape
     print bearing_data.shape
 
-    showTrajectory(range_data)
-    plt.show()
-    exit(0)
-    plt.figure()
+    # showTrajectory(range_data)
+    # plt.show()
+    # exit(0)
+    # plt.figure()
 
     axes = []
     axes.append(plt.subplot2grid((22, 1), (0, 0), rowspan=15))
@@ -213,4 +218,5 @@ if __name__ == '__main__':
     showCorrespondingPoint(trajectory_data, axes[0])
     showRange(range_data, axes[1], range_data[0, 0])
     showBearing(bearing_data, axes[2], range_data[0, 0])
+    plt.savefig(file_prefix+".png", dpi=199, bbox_inches='tight')
     plt.show()
