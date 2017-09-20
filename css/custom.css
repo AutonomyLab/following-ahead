@@ -1,0 +1,14 @@
+body{width:90%;margin:89px auto}
+code{color:#777}
+.highlight>*>*{background-color:#eee;text-align:center}
+footer small{text-align:center;display:block}
+.example h2,.example h3,.example aside{font-family:'Droid Sans',serif;padding:13px;font-size:1.2em;background-color:#eee}
+h3.github{text-align:center}
+aside { 
+  position: relative;
+  float:left;
+  width:170px;
+  height: 1000px 
+  top: 10px;
+  bottom: 0px;
+}

@@ -1,0 +1,20 @@
+@import url(http://fonts.googleapis.com/css?family=Raleway:200,800);
+@import url(http://fonts.googleapis.com/css?family=Droid+Serif:400,700);
+body.vanilla{font-family:'Droid Serif','Times New Roman',serif;font-size:100%;line-height:1.8em;margin-top:55px}body.vanilla>*{font-size:1em}
+.vanilla h1,.vanilla h2,.vanilla h3,.vanilla h4,.vanilla h5,.vanilla h6{font-weight:200;font-family:'Raleway',Helvetica,Arial,sans-serif;line-height:1.5em;margin-bottom:.5em}
+.vanilla h1{font-size:3em}
+.vanilla h2{font-size:2.6em}
+.vanilla h3{font-size:2.2em}
+.vanilla h4{font-size:1.8em}
+.vanilla h5{font-size:1.4em}
+.vanilla h6{font-size:1.2em}
+.vanilla p,.vanilla ul,.vanilla ol{margin-bottom:13px}
+.vanilla a:link{color:#008eb4}
+.vanilla a:visited{color:#4a00b4}
+.vanilla a:hover,.vanilla a:focus{color:#00a2ce}
+.vanilla a:active{text-decoration:none}
+.vanilla table{border-top:1px solid #ccc;border-left:1px solid #ccc;width:100%}
+.vanilla tr{border-bottom:1px solid #ccc}
+.vanilla th,.vanilla td{border-right:1px solid #ccc;padding:3px}
+.vanilla input[type="submit"],.vanilla input[type="button"],.vanilla button{-webkit-border-radius:3px;-moz-border-radius:3px;border-radius:3px;background:#f8f8f8;background:-webkit-gradient(linear, left bottom, left top, color-stop(0, #f0f0f0), color-stop(1, #fff));background:-ms-linear-gradient(bottom, #f0f0f0, #fff);background:-moz-linear-gradient(center bottom, #f0f0f0 0, #fff 100%);background:-o-linear-gradient(#fff, #f0f0f0);filter:progid:DXImageTransform.Microsoft.gradient(startColorstr='#ffffff', endColorstr='#f0f0f0', GradientType=0);border:1px solid #e0e0e0;padding:5px 8px;font-size:.9em}.vanilla input[type="submit"]:hover,.vanilla input[type="button"]:hover,.vanilla button:hover,.vanilla input[type="submit"]:focus,.vanilla input[type="button"]:focus,.vanilla button:focus{background:#f0f0f0;background:-webkit-gradient(linear, left bottom, left top, color-stop(0, #e8e8e8), color-stop(1, #f8f8f8));background:-ms-linear-gradient(bottom, #e8e8e8, #f8f8f8);background:-moz-linear-gradient(center bottom, #e8e8e8 0, #f8f8f8 100%);background:-o-linear-gradient(#f8f8f8, #e8e8e8);filter:progid:DXImageTransform.Microsoft.gradient(startColorstr='#f8f8f8', endColorstr='#e8e8e8', GradientType=0)}
+.vanilla input[type="submit"]:active,.vanilla input[type="button"]:active,.vanilla button:active{background:#e8e8e8;background:-webkit-gradient(linear, left bottom, left top, color-stop(0, #f8f8f8), color-stop(1, #e8e8e8));background:-ms-linear-gradient(bottom, #f8f8f8, #e8e8e8);background:-moz-linear-gradient(center bottom, #f8f8f8 0, #e8e8e8 100%);background:-o-linear-gradient(#e8e8e8, #f8f8f8);filter:progid:DXImageTransform.Microsoft.gradient(startColorstr='#e8e8e8', endColorstr='#f8f8f8', GradientType=0)}
